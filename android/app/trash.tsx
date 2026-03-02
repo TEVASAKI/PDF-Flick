@@ -7,7 +7,6 @@ import {
   FlatList,
   ActivityIndicator,
   Alert,
-  Dimensions,
 } from 'react-native';
 import { Colors, Spacing, Shadows, BorderRadius } from '@/constants/theme';
 import { useAdvancedFileOperations } from '@/hooks/useAdvancedFileOperations';
@@ -42,6 +41,7 @@ export default function TrashScreen() {
    */
   useEffect(() => {
     loadTrashFiles();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadTrashFiles = async () => {
@@ -55,8 +55,8 @@ export default function TrashScreen() {
       } else {
         setError(result.error || 'ゴミ箱の読み込みに失敗しました');
       }
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'エラーが発生しました';
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'エラーが発生しました';
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -113,7 +113,7 @@ export default function TrashScreen() {
           },
         },
       ]);
-    } catch (err) {
+    } catch {
       Alert.alert('エラー', '復元処理中にエラーが発生しました');
     }
   };

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,6 @@ import {
   PanResponder,
   ActivityIndicator,
   Alert,
-  ScrollView,
 } from 'react-native';
 import { Colors, Spacing, Shadows, BorderRadius } from '@/constants/theme';
 import { usePDFFiles } from '@/hooks/usePDFFiles';
@@ -29,13 +28,12 @@ const SWIPE_THRESHOLD = 50; // フリック判定の閾値（ピクセル）
 
 export default function PDFFlickEnhancedScreen() {
   const { files, loading, error } = usePDFFiles();
-  const { addToHistory, undo, redo, canUndo, canRedo, getStatistics } = useUndoRedoHistory();
-  const { moveFile, moveToTrash, restoreFromTrash, operationState } = useAdvancedFileOperations();
+  const { addToHistory, undo, canUndo, getStatistics } = useUndoRedoHistory();
+  const { moveFile, moveToTrash, operationState } = useAdvancedFileOperations();
 
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [saveFolderPath, setSaveFolderPath] = useState<string | null>(null);
+  const [saveFolderPath] = useState<string | null>(null);
   const [showCompletionScreen, setShowCompletionScreen] = useState(false);
-  const [processedFiles, setProcessedFiles] = useState<Set<string>>(new Set());
 
   // アニメーション用
   const pan = useRef(new Animated.ValueXY()).current;
