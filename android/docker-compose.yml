@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  pdf-flick-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pdf-flick-dev
+    volumes:
+      # Project directory
+      - .:/app
+      # Android SDK cache
+      - android-sdk:/opt/android-sdk
+      # Android configuration
+      - ~/.android:/root/.android
+      # Gradle cache
+      - gradle-cache:/root/.gradle
+      # npm cache
+      - npm-cache:/root/.npm
+    ports:
+      # Metro bundler
+      - "8081:8081"
+      # Expo
+      - "19000:19000"
+      - "19001:19001"
+    environment:
+      # Android environment
+      - ANDROID_HOME=/opt/android-sdk
+      - JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+      # Optional: Keystore password (set via .env file)
+      - KEYSTORE_PASSWORD=${KEYSTORE_PASSWORD}
+      - KEY_PASSWORD=${KEY_PASSWORD}
+    stdin_open: true
+    tty: true
+    command: /bin/bash
+
+volumes:
+  android-sdk:
+    driver: local
+  gradle-cache:
+    driver: local
+  npm-cache:
+    driver: local
