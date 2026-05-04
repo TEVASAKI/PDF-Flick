@@ -2020,6 +2020,218 @@ $content = @'
 '@
 [System.IO.File]::WriteAllText("$projectRoot\android\eas.json", $content, [System.Text.Encoding]::UTF8)
 
+# --- android/hooks/useAdvancedFileOperations.ts ---
+Write-Host ">>> android/hooks/useAdvancedFileOperations.ts を書き込み..." -ForegroundColor Cyan
+$null = New-Item -ItemType Directory -Force -Path "$projectRoot\android\hooks"
+$content = @'
+import { useState, useCallback } from 'react';
+import * as FileSystem from 'expo-file-system';
+
+export interface FileOperationResult {
+  success: boolean;
+  error?: string;
+  data?: any;
+}
+
+export interface FileOperationState {
+  isProcessing: boolean;
+  error: string | null;
+  lastOperation: {
+    type: 'move' | 'delete' | 'restore' | null;
+    fileName: string;
+    timestamp: number;
+  } | null;
+}
+
+export const useAdvancedFileOperations = () => {
+  const [operationState, setOperationState] = useState<FileOperationState>({
+    isProcessing: false,
+    error: null,
+    lastOperation: null,
+  });
+
+  const getTrashDir = useCallback(async (): Promise<string> => {
+    const trashDir = (FileSystem.documentDirectory ?? '') + 'trash/';
+    const dirInfo = await FileSystem.getInfoAsync(trashDir);
+    if (!dirInfo.exists) {
+      await FileSystem.makeDirectoryAsync(trashDir, { intermediates: true });
+    }
+    return trashDir;
+  }, []);
+
+  const moveFile = useCallback(
+    async (sourcePath: string, destinationFolder: string): Promise<FileOperationResult> => {
+      try {
+        setOperationState((prev) => ({ ...prev, isProcessing: true, error: null }));
+        const fileName = sourcePath.split('/').pop();
+        if (!fileName) throw new Error('ファイル名を取得できません');
+        const destDirInfo = await FileSystem.getInfoAsync(destinationFolder);
+        if (!destDirInfo.exists) {
+          await FileSystem.makeDirectoryAsync(destinationFolder, { intermediates: true });
+        }
+        const destinationPath = destinationFolder + fileName;
+        const existingFile = await FileSystem.getInfoAsync(destinationPath);
+        if (existingFile.exists) {
+          throw new Error(`ファイル "${fileName}" は既に存在します`);
+        }
+        await FileSystem.copyAsync({ from: sourcePath, to: destinationPath });
+        await FileSystem.deleteAsync(sourcePath);
+        setOperationState((prev) => ({
+          ...prev,
+          isProcessing: false,
+          lastOperation: { type: 'move', fileName, timestamp: Date.now() },
+        }));
+        return { success: true, data: { path: destinationPath, fileName } };
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'ファイル移動エラー';
+        setOperationState((prev) => ({ ...prev, isProcessing: false, error: errorMessage }));
+        console.error('Error moving file:', err);
+        return { success: false, error: errorMessage };
+      }
+    },
+    []
+  );
+
+  const deleteFile = useCallback(
+    async (filePath: string): Promise<FileOperationResult> => {
+      try {
+        setOperationState((prev) => ({ ...prev, isProcessing: true, error: null }));
+        const fileName = filePath.split('/').pop() || 'unknown';
+        const fileInfo = await FileSystem.getInfoAsync(filePath);
+        if (!fileInfo.exists) throw new Error('ファイルが見つかりません');
+        await FileSystem.deleteAsync(filePath);
+        setOperationState((prev) => ({
+          ...prev,
+          isProcessing: false,
+          lastOperation: { type: 'delete', fileName, timestamp: Date.now() },
+        }));
+        return { success: true, data: { fileName } };
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'ファイル削除エラー';
+        setOperationState((prev) => ({ ...prev, isProcessing: false, error: errorMessage }));
+        console.error('Error deleting file:', err);
+        return { success: false, error: errorMessage };
+      }
+    },
+    []
+  );
+
+  const moveToTrash = useCallback(
+    async (filePath: string): Promise<FileOperationResult> => {
+      try {
+        setOperationState((prev) => ({ ...prev, isProcessing: true, error: null }));
+        const fileName = filePath.split('/').pop();
+        if (!fileName) throw new Error('ファイル名を取得できません');
+        const trashDir = await getTrashDir();
+        const timestamp = Date.now();
+        const trashFileName = `${timestamp}_${fileName}`;
+        const trashPath = trashDir + trashFileName;
+        await FileSystem.copyAsync({ from: filePath, to: trashPath });
+        await FileSystem.deleteAsync(filePath);
+        setOperationState((prev) => ({
+          ...prev,
+          isProcessing: false,
+          lastOperation: { type: 'delete', fileName, timestamp: Date.now() },
+        }));
+        return { success: true, data: { trashPath, originalFileName: fileName, originalPath: filePath } };
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'ファイル削除エラー';
+        setOperationState((prev) => ({ ...prev, isProcessing: false, error: errorMessage }));
+        console.error('Error moving to trash:', err);
+        return { success: false, error: errorMessage };
+      }
+    },
+    [getTrashDir]
+  );
+
+  const restoreFromTrash = useCallback(
+    async (trashPath: string, originalPath: string): Promise<FileOperationResult> => {
+      try {
+        setOperationState((prev) => ({ ...prev, isProcessing: true, error: null }));
+        const fileName = originalPath.split('/').pop() || 'unknown';
+        await FileSystem.copyAsync({ from: trashPath, to: originalPath });
+        await FileSystem.deleteAsync(trashPath);
+        setOperationState((prev) => ({
+          ...prev,
+          isProcessing: false,
+          lastOperation: { type: 'restore', fileName, timestamp: Date.now() },
+        }));
+        return { success: true, data: { fileName } };
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'ファイル復元エラー';
+        setOperationState((prev) => ({ ...prev, isProcessing: false, error: errorMessage }));
+        console.error('Error restoring from trash:', err);
+        return { success: false, error: errorMessage };
+      }
+    },
+    []
+  );
+
+  const getTrashFiles = useCallback(async () => {
+    try {
+      const trashDir = await getTrashDir();
+      const fileList = await FileSystem.readDirectoryAsync(trashDir);
+      const trashFiles = await Promise.all(
+        fileList.map(async (filename) => {
+          const filePath = trashDir + filename;
+          const fileInfo = await FileSystem.getInfoAsync(filePath);
+          return {
+            name: filename,
+            path: filePath,
+            size: (fileInfo as any).size ?? 0,
+            modifiedDate: (fileInfo as any).modificationTime ? (fileInfo as any).modificationTime * 1000 : 0,
+          };
+        })
+      );
+      return { success: true, data: trashFiles };
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'ゴミ箱取得エラー';
+      console.error('Error getting trash files:', err);
+      return { success: false, error: errorMessage };
+    }
+  }, [getTrashDir]);
+
+  const emptyTrash = useCallback(async (): Promise<FileOperationResult> => {
+    try {
+      setOperationState((prev) => ({ ...prev, isProcessing: true, error: null }));
+      const trashDir = await getTrashDir();
+      const fileList = await FileSystem.readDirectoryAsync(trashDir);
+      await Promise.all(
+        fileList.map((filename) =>
+          FileSystem.deleteAsync(trashDir + filename).catch((err) => {
+            console.error(`Error deleting ${filename}:`, err);
+          })
+        )
+      );
+      setOperationState((prev) => ({ ...prev, isProcessing: false }));
+      return { success: true, data: { filesDeleted: fileList.length } };
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'ゴミ箱削除エラー';
+      setOperationState((prev) => ({ ...prev, isProcessing: false, error: errorMessage }));
+      console.error('Error emptying trash:', err);
+      return { success: false, error: errorMessage };
+    }
+  }, [getTrashDir]);
+
+  const resetOperationState = useCallback(() => {
+    setOperationState({ isProcessing: false, error: null, lastOperation: null });
+  }, []);
+
+  return {
+    operationState,
+    moveFile,
+    deleteFile,
+    moveToTrash,
+    restoreFromTrash,
+    getTrashFiles,
+    emptyTrash,
+    resetOperationState,
+    getTrashDir,
+  };
+};
+'@
+[System.IO.File]::WriteAllText("$projectRoot\android\hooks\useAdvancedFileOperations.ts", $content, [System.Text.Encoding]::UTF8)
+
 Write-Host ">>> 全ファイル書き込み完了" -ForegroundColor Green
 
 # ─────────────────────────────────────────────────────────────────────────────
