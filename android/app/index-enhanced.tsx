@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,35 +8,59 @@ import {
   PanResponder,
   ActivityIndicator,
   Alert,
+  PermissionsAndroid,
+  Platform,
 } from 'react-native';
 import { Colors, Spacing, Shadows, BorderRadius } from '@/constants/theme';
 import { usePDFFiles } from '@/hooks/usePDFFiles';
 import { useUndoRedoHistory } from '@/hooks/useUndoRedoHistory';
 import { useAdvancedFileOperations } from '@/hooks/useAdvancedFileOperations';
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 
 /**
  * PDF Flick - 強化版メイン画面
- * 
+ *
  * デザイン哲学: エレガント・プロフェッショナル型
  * - Undo/Redo機能の完全実装
  * - 高度なファイル操作
  * - ゴミ箱機能
  */
 
-const SWIPE_THRESHOLD = 50; // フリック判定の閾値（ピクセル）
+const SWIPE_THRESHOLD = 50;
 
 export default function PDFFlickEnhancedScreen() {
-  const { files, loading, error } = usePDFFiles();
+  const { files, loading, error, refresh } = usePDFFiles();
   const { addToHistory, undo, canUndo, getStatistics } = useUndoRedoHistory();
-  const { moveFile, moveToTrash, operationState } = useAdvancedFileOperations();
+  const { moveFile, moveToTrash, restoreFromTrash, operationState } = useAdvancedFileOperations();
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [saveFolderPath] = useState<string | null>(null);
   const [showCompletionScreen, setShowCompletionScreen] = useState(false);
+  const [processedFiles, setProcessedFiles] = useState<Set<string>>(new Set());
 
   // アニメーション用
   const pan = useRef(new Animated.ValueXY()).current;
+  const swipeHintOpacity = useRef(new Animated.Value(0)).current;
+  const swipeHintDirection = useRef<'keep' | 'delete' | null>(null);
+
+  // ファイルアクセス権限をリクエスト
+  useEffect(() => {
+    const requestPermissions = async () => {
+      if (Platform.OS === 'android') {
+        try {
+          await PermissionsAndroid.requestMultiple([
+            PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
+            PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
+          ]);
+        } catch (err) {
+          console.warn('権限リクエストエラー:', err);
+        }
+      }
+    };
+    requestPermissions();
+  }, []);
+
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
@@ -47,15 +71,12 @@ export default function PDFFlickEnhancedScreen() {
       onPanResponderRelease: (e, { dx }) => {
         if (Math.abs(dx) > SWIPE_THRESHOLD) {
           if (dx > 0) {
-            // 右フリック: 保存
             handleKeep();
           } else {
-            // 左フリック: 削除
             handleDelete();
           }
         }
 
-        // カードを元の位置に戻す
         Animated.spring(pan, {
           toValue: { x: 0, y: 0 },
           useNativeDriver: false,
@@ -64,19 +85,22 @@ export default function PDFFlickEnhancedScreen() {
     })
   ).current;
 
-  /**
-   * ファイルを保存フォルダに移動
-   */
   const handleKeep = async () => {
     if (currentIndex >= files.length) return;
     if (!saveFolderPath) {
-      Alert.alert('エラー', '保存先フォルダが設定されていません');
+      Alert.alert(
+        '保存先未設定',
+        '設定画面で保存先フォルダを設定してください',
+        [
+          { text: 'キャンセル', style: 'cancel' },
+          { text: '設定へ', onPress: () => router.push('/settings') },
+        ]
+      );
       return;
     }
 
     const currentFile = files[currentIndex];
 
-    // 操作履歴に追加
     addToHistory({
       action: 'keep',
       fileId: currentFile.id,
@@ -88,27 +112,21 @@ export default function PDFFlickEnhancedScreen() {
       },
     });
 
-    // ファイルを移動
     const result = await moveFile(currentFile.path, saveFolderPath);
     if (!result.success) {
       Alert.alert('エラー', `ファイル移動に失敗しました: ${result.error}`);
       return;
     }
 
-    // 処理済みファイルに追加
     setProcessedFiles((prev) => new Set([...prev, currentFile.id]));
     moveToNext();
   };
 
-  /**
-   * ファイルをゴミ箱に移動
-   */
   const handleDelete = async () => {
     if (currentIndex >= files.length) return;
 
     const currentFile = files[currentIndex];
 
-    // 操作履歴に追加
     addToHistory({
       action: 'delete',
       fileId: currentFile.id,
@@ -119,21 +137,16 @@ export default function PDFFlickEnhancedScreen() {
       },
     });
 
-    // ゴミ箱に移動
     const result = await moveToTrash(currentFile.path);
     if (!result.success) {
       Alert.alert('エラー', `ファイル削除に失敗しました: ${result.error}`);
       return;
     }
 
-    // 処理済みファイルに追加
     setProcessedFiles((prev) => new Set([...prev, currentFile.id]));
     moveToNext();
   };
 
-  /**
-   * 直前の操作を取り消す
-   */
   const handleUndo = async () => {
     if (!canUndo()) {
       Alert.alert('情報', '取り消す操作がありません');
@@ -143,42 +156,29 @@ export default function PDFFlickEnhancedScreen() {
     const lastEntry = undo();
     if (!lastEntry) return;
 
-    // 操作を取り消す
-    if (lastEntry.action === 'keep') {
-      // 保存したファイルを元に戻す
-      if (lastEntry.metadata?.destinationPath) {
-        const result = await moveFile(
-          lastEntry.metadata.destinationPath + lastEntry.fileName,
-          lastEntry.filePath.substring(0, lastEntry.filePath.lastIndexOf('/') + 1)
-        );
-        if (!result.success) {
-          Alert.alert('エラー', `取り消しに失敗しました: ${result.error}`);
-        }
+    if (lastEntry.action === 'keep' && lastEntry.metadata?.destinationPath) {
+      const destFile = lastEntry.metadata.destinationPath + lastEntry.fileName;
+      const origDir = lastEntry.filePath.substring(0, lastEntry.filePath.lastIndexOf('/') + 1);
+      const result = await moveFile(destFile, origDir);
+      if (!result.success) {
+        Alert.alert('エラー', `取り消しに失敗しました: ${result.error}`);
       }
-    } else if (lastEntry.action === 'delete') {
-      // ゴミ箱から復元
-      if (lastEntry.metadata?.trashPath) {
-        const result = await restoreFromTrash(lastEntry.metadata.trashPath, lastEntry.filePath);
-        if (!result.success) {
-          Alert.alert('エラー', `復元に失敗しました: ${result.error}`);
-        }
+    } else if (lastEntry.action === 'delete' && lastEntry.metadata?.trashPath) {
+      const result = await restoreFromTrash(lastEntry.metadata.trashPath, lastEntry.filePath);
+      if (!result.success) {
+        Alert.alert('エラー', `復元に失敗しました: ${result.error}`);
       }
     }
 
-    // 処理済みファイルから削除
     setProcessedFiles((prev) => {
       const newSet = new Set(prev);
       newSet.delete(lastEntry.fileId);
       return newSet;
     });
 
-    // インデックスを戻す
     setCurrentIndex(Math.max(0, currentIndex - 1));
   };
 
-  /**
-   * 次のファイルに移動
-   */
   const moveToNext = () => {
     if (currentIndex + 1 >= files.length) {
       setShowCompletionScreen(true);
@@ -188,14 +188,12 @@ export default function PDFFlickEnhancedScreen() {
     }
   };
 
-  /**
-   * 処理を最初からやり直す
-   */
   const handleReset = () => {
     setCurrentIndex(0);
     setProcessedFiles(new Set());
     setShowCompletionScreen(false);
     pan.setValue({ x: 0, y: 0 });
+    refresh();
   };
 
   // ローディング状態
@@ -215,6 +213,9 @@ export default function PDFFlickEnhancedScreen() {
         <Ionicons name="alert-circle-outline" size={48} color={Colors.error} />
         <Text style={styles.errorText}>エラーが発生しました</Text>
         <Text style={styles.errorDetailText}>{error}</Text>
+        <TouchableOpacity style={styles.retryButton} onPress={refresh}>
+          <Text style={styles.retryButtonText}>再試行</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -223,8 +224,13 @@ export default function PDFFlickEnhancedScreen() {
   if (files.length === 0) {
     return (
       <View style={styles.container}>
-        <Ionicons name="document-outline" size={48} color={Colors.muted} />
+        <Ionicons name="document-outline" size={64} color={Colors.muted} />
+        <Text style={styles.emptyText}>Downloadsフォルダに</Text>
         <Text style={styles.emptyText}>PDFファイルが見つかりません</Text>
+        <TouchableOpacity style={styles.retryButton} onPress={refresh}>
+          <Ionicons name="refresh" size={16} color={Colors.white} />
+          <Text style={styles.retryButtonText}>再スキャン</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -241,10 +247,12 @@ export default function PDFFlickEnhancedScreen() {
 
           <View style={styles.statsContainer}>
             <View style={styles.statItem}>
+              <Ionicons name="checkmark-circle-outline" size={24} color={Colors.success} />
               <Text style={styles.statLabel}>保存</Text>
               <Text style={styles.statValue}>{stats.keep}</Text>
             </View>
             <View style={styles.statItem}>
+              <Ionicons name="trash-outline" size={24} color={Colors.error} />
               <Text style={styles.statLabel}>削除</Text>
               <Text style={styles.statValue}>{stats.delete}</Text>
             </View>
@@ -262,14 +270,47 @@ export default function PDFFlickEnhancedScreen() {
   const currentFile = files[currentIndex];
   const stats = getStatistics();
 
+  // スワイプ方向のオーバーレイ色
+  const cardRotation = pan.x.interpolate({
+    inputRange: [-200, 0, 200],
+    outputRange: ['-15deg', '0deg', '15deg'],
+  });
+  const keepOverlayOpacity = pan.x.interpolate({
+    inputRange: [0, 80],
+    outputRange: [0, 0.85],
+    extrapolate: 'clamp',
+  });
+  const deleteOverlayOpacity = pan.x.interpolate({
+    inputRange: [-80, 0],
+    outputRange: [0.85, 0],
+    extrapolate: 'clamp',
+  });
+
   return (
     <View style={styles.container}>
       {/* ヘッダー */}
       <View style={styles.header}>
-        <Text style={styles.title}>PDF Flick</Text>
-        <Text style={styles.subtitle}>
-          {currentIndex + 1} / {files.length}
-        </Text>
+        <View style={styles.headerLeft}>
+          <Text style={styles.title}>PDF Flick</Text>
+          <Text style={styles.subtitle}>
+            {currentIndex + 1} / {files.length}
+          </Text>
+        </View>
+        <TouchableOpacity onPress={() => router.push('/settings')} style={styles.settingsButton}>
+          <Ionicons name="settings-outline" size={24} color={Colors.foreground} />
+        </TouchableOpacity>
+      </View>
+
+      {/* 統計バッジ */}
+      <View style={styles.statsBar}>
+        <View style={[styles.statBadge, { backgroundColor: Colors.success + '20' }]}>
+          <Ionicons name="checkmark" size={16} color={Colors.success} />
+          <Text style={[styles.statBadgeText, { color: Colors.success }]}>{stats.keep} 保存</Text>
+        </View>
+        <View style={[styles.statBadge, { backgroundColor: Colors.error + '20' }]}>
+          <Ionicons name="trash" size={16} color={Colors.error} />
+          <Text style={[styles.statBadgeText, { color: Colors.error }]}>{stats.delete} 削除</Text>
+        </View>
       </View>
 
       {/* ファイルカード */}
@@ -277,28 +318,44 @@ export default function PDFFlickEnhancedScreen() {
         style={[
           styles.cardContainer,
           {
-            transform: [{ translateX: pan.x }],
+            transform: [
+              { translateX: pan.x },
+              { rotate: cardRotation },
+            ],
           },
         ]}
         {...panResponder.panHandlers}
       >
+        {/* 保存オーバーレイ */}
+        <Animated.View style={[styles.overlay, styles.keepOverlay, { opacity: keepOverlayOpacity }]}>
+          <Text style={styles.overlayText}>保存</Text>
+        </Animated.View>
+
+        {/* 削除オーバーレイ */}
+        <Animated.View style={[styles.overlay, styles.deleteOverlay, { opacity: deleteOverlayOpacity }]}>
+          <Text style={styles.overlayText}>削除</Text>
+        </Animated.View>
+
         <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <Ionicons name="document-text" size={32} color={Colors.primary} />
+          <View style={styles.cardPreview}>
+            <Ionicons name="document-text" size={80} color={Colors.border} />
+            <Text style={styles.previewLabel}>PDF</Text>
+          </View>
+
+          <View style={styles.cardInfo}>
             <Text style={styles.fileName} numberOfLines={2}>
               {currentFile.name}
             </Text>
-          </View>
-
-          <View style={styles.cardBody}>
             <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>ファイルサイズ:</Text>
+              <Ionicons name="resize" size={14} color={Colors.mutedForeground} />
               <Text style={styles.infoValue}>
-                {(currentFile.size / 1024).toFixed(2)} KB
+                {currentFile.size > 1024 * 1024
+                  ? `${(currentFile.size / 1024 / 1024).toFixed(1)} MB`
+                  : `${(currentFile.size / 1024).toFixed(0)} KB`}
               </Text>
             </View>
             <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>更新日時:</Text>
+              <Ionicons name="calendar-outline" size={14} color={Colors.mutedForeground} />
               <Text style={styles.infoValue}>
                 {new Date(currentFile.modifiedDate).toLocaleDateString('ja-JP')}
               </Text>
@@ -306,22 +363,10 @@ export default function PDFFlickEnhancedScreen() {
           </View>
 
           <View style={styles.cardFooter}>
-            <Text style={styles.hint}>← スワイプして削除 | 保存 →</Text>
+            <Text style={styles.hint}>← 削除　　保存 →</Text>
           </View>
         </View>
       </Animated.View>
-
-      {/* 統計情報 */}
-      <View style={styles.statsBar}>
-        <View style={styles.statBadge}>
-          <Ionicons name="checkmark" size={16} color={Colors.success} />
-          <Text style={styles.statBadgeText}>{stats.keep}</Text>
-        </View>
-        <View style={styles.statBadge}>
-          <Ionicons name="trash" size={16} color={Colors.error} />
-          <Text style={styles.statBadgeText}>{stats.delete}</Text>
-        </View>
-      </View>
 
       {/* ボタンエリア */}
       <View style={styles.buttonContainer}>
@@ -330,7 +375,7 @@ export default function PDFFlickEnhancedScreen() {
           onPress={handleDelete}
           disabled={operationState.isProcessing}
         >
-          <Ionicons name="trash-outline" size={20} color={Colors.white} />
+          <Ionicons name="trash-outline" size={22} color={Colors.white} />
           <Text style={styles.buttonText}>削除</Text>
         </TouchableOpacity>
 
@@ -339,7 +384,7 @@ export default function PDFFlickEnhancedScreen() {
           onPress={handleUndo}
           disabled={!canUndo() || operationState.isProcessing}
         >
-          <Ionicons name="arrow-undo" size={20} color={Colors.white} />
+          <Ionicons name="arrow-undo" size={22} color={Colors.white} />
           <Text style={styles.buttonText}>元に戻す</Text>
         </TouchableOpacity>
 
@@ -348,15 +393,15 @@ export default function PDFFlickEnhancedScreen() {
           onPress={handleKeep}
           disabled={operationState.isProcessing}
         >
-          <Ionicons name="checkmark-outline" size={20} color={Colors.white} />
+          <Ionicons name="checkmark-outline" size={22} color={Colors.white} />
           <Text style={styles.buttonText}>保存</Text>
         </TouchableOpacity>
       </View>
 
-      {/* ローディングインジケーター */}
+      {/* 処理中オーバーレイ */}
       {operationState.isProcessing && (
         <View style={styles.processingOverlay}>
-          <ActivityIndicator size="large" color={Colors.primary} />
+          <ActivityIndicator size="large" color={Colors.white} />
           <Text style={styles.processingText}>処理中...</Text>
         </View>
       )}
@@ -368,100 +413,135 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
-    justifyContent: 'center',
     alignItems: 'center',
-    padding: Spacing.md,
+    paddingHorizontal: Spacing.md,
+    paddingTop: Spacing.lg,
+    paddingBottom: Spacing.md,
   },
   header: {
     width: '100%',
-    marginBottom: Spacing.lg,
-    alignItems: 'center',
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: Colors.foreground,
-    marginBottom: Spacing.xs,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: Colors.muted,
-  },
-  cardContainer: {
-    width: '100%',
-    marginBottom: Spacing.lg,
-  },
-  card: {
-    backgroundColor: Colors.card,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.md,
-    ...Shadows.md,
-  },
-  cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: Spacing.md,
   },
-  fileName: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: Colors.foreground,
-    marginLeft: Spacing.md,
+  headerLeft: {
     flex: 1,
   },
-  cardBody: {
-    marginBottom: Spacing.md,
-    paddingVertical: Spacing.md,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: Colors.border,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: Spacing.sm,
-  },
-  infoLabel: {
-    fontSize: 12,
-    color: Colors.muted,
-  },
-  infoValue: {
-    fontSize: 12,
+  title: {
+    fontSize: 26,
+    fontWeight: '700',
     color: Colors.foreground,
-    fontWeight: '500',
+    fontFamily: 'serif',
   },
-  cardFooter: {
-    alignItems: 'center',
-    paddingTop: Spacing.md,
+  subtitle: {
+    fontSize: 13,
+    color: Colors.mutedForeground,
+    marginTop: 2,
   },
-  hint: {
-    fontSize: 12,
-    color: Colors.muted,
-    fontStyle: 'italic',
+  settingsButton: {
+    padding: Spacing.sm,
   },
   statsBar: {
     flexDirection: 'row',
-    justifyContent: 'center',
-    gap: Spacing.md,
-    marginBottom: Spacing.lg,
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+    alignSelf: 'flex-start',
   },
   statBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.secondary,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.md,
-    gap: Spacing.xs,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.full,
+    gap: 4,
   },
   statBadgeText: {
-    fontSize: 14,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  cardContainer: {
+    width: '100%',
+    flex: 1,
+    marginBottom: Spacing.md,
+  },
+  card: {
+    flex: 1,
+    backgroundColor: Colors.white,
+    borderRadius: BorderRadius.lg,
+    overflow: 'hidden',
+    ...Shadows.md,
+  },
+  overlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 10,
+    borderRadius: BorderRadius.lg,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  keepOverlay: {
+    backgroundColor: Colors.success,
+  },
+  deleteOverlay: {
+    backgroundColor: Colors.error,
+  },
+  overlayText: {
+    fontSize: 48,
+    fontWeight: '700',
+    color: Colors.white,
+    fontFamily: 'serif',
+    opacity: 0.9,
+  },
+  cardPreview: {
+    flex: 1,
+    backgroundColor: Colors.muted,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  previewLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.border,
+    marginTop: Spacing.sm,
+    letterSpacing: 4,
+  },
+  cardInfo: {
+    padding: Spacing.md,
+    gap: Spacing.xs,
+  },
+  fileName: {
+    fontSize: 16,
     fontWeight: '600',
     color: Colors.foreground,
+    marginBottom: Spacing.xs,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+  },
+  infoValue: {
+    fontSize: 13,
+    color: Colors.mutedForeground,
+  },
+  cardFooter: {
+    borderTopWidth: 1,
+    borderColor: Colors.border,
+    paddingVertical: Spacing.sm,
+    alignItems: 'center',
+  },
+  hint: {
+    fontSize: 12,
+    color: Colors.mutedForeground,
+    fontStyle: 'italic',
   },
   buttonContainer: {
     flexDirection: 'row',
-    gap: Spacing.md,
+    gap: Spacing.sm,
     width: '100%',
   },
   button: {
@@ -471,19 +551,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: Spacing.md,
     borderRadius: BorderRadius.md,
-    gap: Spacing.sm,
+    gap: Spacing.xs,
   },
   deleteButton: {
     backgroundColor: Colors.error,
   },
   undoButton: {
-    backgroundColor: Colors.muted,
+    backgroundColor: Colors.mutedForeground,
   },
   keepButton: {
     backgroundColor: Colors.success,
   },
   buttonDisabled: {
-    opacity: 0.5,
+    opacity: 0.4,
   },
   buttonText: {
     color: Colors.white,
@@ -492,9 +572,10 @@ const styles = StyleSheet.create({
   },
   completionCard: {
     alignItems: 'center',
-    backgroundColor: Colors.card,
+    backgroundColor: Colors.white,
     borderRadius: BorderRadius.lg,
     padding: Spacing.lg,
+    width: '100%',
     ...Shadows.md,
   },
   completionTitle: {
@@ -505,27 +586,27 @@ const styles = StyleSheet.create({
   },
   completionSubtitle: {
     fontSize: 14,
-    color: Colors.muted,
+    color: Colors.mutedForeground,
     marginTop: Spacing.sm,
     marginBottom: Spacing.lg,
   },
   statsContainer: {
     flexDirection: 'row',
-    gap: Spacing.lg,
+    gap: Spacing.xl,
     marginBottom: Spacing.lg,
   },
   statItem: {
     alignItems: 'center',
+    gap: Spacing.xs,
   },
   statLabel: {
     fontSize: 12,
-    color: Colors.muted,
+    color: Colors.mutedForeground,
   },
   statValue: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: '700',
     color: Colors.foreground,
-    marginTop: Spacing.xs,
   },
   resetButton: {
     flexDirection: 'row',
@@ -542,7 +623,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 14,
-    color: Colors.muted,
+    color: Colors.mutedForeground,
     marginTop: Spacing.md,
   },
   errorText: {
@@ -553,13 +634,29 @@ const styles = StyleSheet.create({
   },
   errorDetailText: {
     fontSize: 12,
-    color: Colors.muted,
+    color: Colors.mutedForeground,
     marginTop: Spacing.sm,
+    textAlign: 'center',
+    paddingHorizontal: Spacing.md,
   },
   emptyText: {
     fontSize: 16,
-    color: Colors.muted,
-    marginTop: Spacing.md,
+    color: Colors.mutedForeground,
+    marginTop: Spacing.sm,
+  },
+  retryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.primary,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.md,
+    gap: Spacing.sm,
+    marginTop: Spacing.lg,
+  },
+  retryButtonText: {
+    color: Colors.white,
+    fontWeight: '600',
   },
   processingOverlay: {
     position: 'absolute',
@@ -567,14 +664,14 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: BorderRadius.lg,
   },
   processingText: {
     color: Colors.white,
     marginTop: Spacing.md,
     fontWeight: '600',
+    fontSize: 16,
   },
 });

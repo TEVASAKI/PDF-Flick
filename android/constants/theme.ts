@@ -29,6 +29,21 @@ export const Colors = {
     warning: '#FFC107',
     info: '#2196F3',
   },
+  // ライトテーマのフラットエイリアス（直接参照用）
+  white: '#FFFFFF',
+  black: '#000000',
+  background: '#FFFFFF',
+  foreground: '#2C2C2C',
+  primary: '#2C2C2C',
+  secondary: '#1B4332',
+  accent: '#D62828',
+  muted: '#F5F5F5',
+  mutedForeground: '#808080',
+  border: '#E0E0E0',
+  success: '#1B4332',
+  error: '#D62828',
+  warning: '#F59E0B',
+  info: '#3B82F6',
 };
 
 export const Fonts = Platform.select({

@@ -7,72 +7,57 @@ import {
   Alert,
   ScrollView,
 } from 'react-native';
-import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
-import { Paths } from 'expo-file-system';
-import { Colors, Spacing, BorderRadius } from '@/constants/theme';
+import { Colors, Spacing, BorderRadius, Shadows } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 
-/**
- * PDF Flick - 設定画面
- * 
- * 保存先フォルダを設定するための画面
- */
+const CONFIG_PATH = (FileSystem.documentDirectory ?? '') + 'pdf_flick_config.json';
 
 export default function SettingsScreen() {
+  const router = useRouter();
   const [saveFolderPath, setSaveFolderPath] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // 初期化時に保存先フォルダを読み込む
   useEffect(() => {
     loadSaveFolderPath();
   }, []);
 
-  /**
-   * ローカルストレージから保存先フォルダパスを読み込む
-   */
   const loadSaveFolderPath = async () => {
     try {
-      const storagePath = new FileSystem.File(Paths.document, 'pdf_flick_config.json').uri;
-      const fileInfo = await FileSystem.getInfoAsync(storagePath);
-
+      const fileInfo = await FileSystem.getInfoAsync(CONFIG_PATH);
       if (fileInfo.exists) {
-        const content = await FileSystem.readAsStringAsync(storagePath);
+        const content = await FileSystem.readAsStringAsync(CONFIG_PATH);
         const config = JSON.parse(content);
-        setSaveFolderPath(config.saveFolderPath || null);
+        setSaveFolderPath(config.saveFolderPath ?? null);
       }
     } catch (error) {
-      console.error('Error loading save folder path:', error);
+      console.error('Error loading config:', error);
     }
   };
 
-  /**
-   * 保存先フォルダを選択
-   */
+  const saveFolderPathToStorage = async (folderPath: string) => {
+    try {
+      const config = { saveFolderPath: folderPath };
+      await FileSystem.writeAsStringAsync(CONFIG_PATH, JSON.stringify(config));
+    } catch (error) {
+      console.error('Error saving config:', error);
+      throw error;
+    }
+  };
+
   const selectSaveFolder = async () => {
     try {
       setLoading(true);
 
-      // ドキュメントピッカーを起動
-      const result = await DocumentPicker.getDocumentAsync({
-        type: 'folder',
-      });
+      // Storage Access Framework でフォルダ選択
+      const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
 
-      if (result.type === 'success') {
-        const folderUri = result.uri;
-
-        // フォルダが存在するか確認
-        const folderInfo = await FileSystem.getInfoAsync(folderUri);
-        if (!folderInfo.isDirectory) {
-          Alert.alert('エラー', 'フォルダを選択してください');
-          return;
-        }
-
-        // 保存先フォルダパスを保存
+      if (permissions.granted) {
+        const folderUri = permissions.directoryUri;
         await saveFolderPathToStorage(folderUri);
         setSaveFolderPath(folderUri);
-
-        Alert.alert('成功', `保存先フォルダを設定しました:\n${folderUri}`);
+        Alert.alert('成功', '保存先フォルダを設定しました');
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'フォルダ選択エラー';
@@ -83,174 +68,126 @@ export default function SettingsScreen() {
     }
   };
 
-  /**
-   * 保存先フォルダパスをローカルストレージに保存
-   */
-  const saveFolderPathToStorage = async (folderPath: string) => {
-    try {
-      const storagePath = new FileSystem.File(Paths.document, 'pdf_flick_config.json').uri;
-      const config = { saveFolderPath: folderPath };
-      await FileSystem.writeAsStringAsync(storagePath, JSON.stringify(config));
-    } catch (error) {
-      console.error('Error saving folder path:', error);
-      throw error;
-    }
-  };
-
-  /**
-   * 保存先フォルダをクリア
-   */
   const clearSaveFolder = async () => {
-    Alert.alert('確認', '保存先フォルダをクリアしますか?', [
-      {
-        text: 'キャンセル',
-        onPress: () => {},
-        style: 'cancel',
-      },
+    Alert.alert('確認', '保存先フォルダの設定をクリアしますか？', [
+      { text: 'キャンセル', style: 'cancel' },
       {
         text: 'クリア',
+        style: 'destructive',
         onPress: async () => {
           try {
-            const storagePath = new FileSystem.File(Paths.document, 'pdf_flick_config.json').uri;
-            const config = { saveFolderPath: null };
-            await FileSystem.writeAsStringAsync(storagePath, JSON.stringify(config));
+            const fileInfo = await FileSystem.getInfoAsync(CONFIG_PATH);
+            if (fileInfo.exists) {
+              await FileSystem.deleteAsync(CONFIG_PATH);
+            }
             setSaveFolderPath(null);
-            Alert.alert('成功', '保存先フォルダをクリアしました');
+            Alert.alert('成功', '設定をクリアしました');
           } catch (error) {
-              console.error('Error clearing folder:', error);
-              Alert.alert('エラー', 'クリアに失敗しました');
+            Alert.alert('エラー', 'クリアに失敗しました');
           }
         },
-        style: 'destructive',
       },
     ]);
   };
 
   return (
-    <ScrollView style={styles.container}>
-      {/* ヘッダー */}
-      <View style={styles.header}>
-        <Text style={styles.title}>設定</Text>
-        <Text style={styles.subtitle}>PDF Flick の設定を管理します</Text>
-      </View>
-
+    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
       {/* 保存先フォルダ設定 */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>保存先フォルダ</Text>
 
-        <View style={styles.settingCard}>
-          <Text style={styles.settingLabel}>保存先フォルダパス</Text>
-
+        <View style={styles.card}>
           {saveFolderPath ? (
-            <View style={styles.folderPathContainer}>
-              <Ionicons name="folder-outline" size={20} color={Colors.light.secondary} />
-              <Text style={styles.folderPath} numberOfLines={2}>
-                {saveFolderPath}
-              </Text>
+            <View style={styles.folderSelected}>
+              <View style={styles.folderInfo}>
+                <Ionicons name="folder" size={24} color={Colors.success} />
+                <View style={styles.folderTextContainer}>
+                  <Text style={styles.folderLabel}>設定済み</Text>
+                  <Text style={styles.folderPath} numberOfLines={2}>
+                    {saveFolderPath}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.folderActions}>
+                <TouchableOpacity
+                  style={[styles.button, styles.changeButton]}
+                  onPress={selectSaveFolder}
+                  disabled={loading}
+                >
+                  <Ionicons name="folder-open" size={16} color={Colors.white} />
+                  <Text style={styles.buttonText}>変更</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.button, styles.clearButton]}
+                  onPress={clearSaveFolder}
+                  disabled={loading}
+                >
+                  <Ionicons name="trash-outline" size={16} color={Colors.white} />
+                  <Text style={styles.buttonText}>クリア</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           ) : (
-            <Text style={styles.noFolderText}>フォルダが設定されていません</Text>
-          )}
-
-          <View style={styles.buttonGroup}>
-            <TouchableOpacity
-              style={[styles.settingButton, styles.selectButton]}
-              onPress={selectSaveFolder}
-              disabled={loading}
-            >
-              <Ionicons name="folder-open-outline" size={18} color={Colors.light.secondary} />
-              <Text style={[styles.settingButtonText, { color: Colors.light.secondary }]}>
-                フォルダを選択
+            <View style={styles.folderNotSet}>
+              <Ionicons name="folder-open-outline" size={48} color={Colors.border} />
+              <Text style={styles.folderNotSetText}>保存先フォルダが未設定です</Text>
+              <Text style={styles.folderNotSetSubtext}>
+                右フリックで「保存」操作をするにはフォルダを設定してください
               </Text>
-            </TouchableOpacity>
 
-            {saveFolderPath && (
               <TouchableOpacity
-                style={[styles.settingButton, styles.clearButton]}
-                onPress={clearSaveFolder}
+                style={[styles.button, styles.selectButton]}
+                onPress={selectSaveFolder}
                 disabled={loading}
               >
-                <Ionicons name="trash-outline" size={18} color={Colors.light.error} />
-                <Text style={[styles.settingButtonText, { color: Colors.light.error }]}>
-                  クリア
+                <Ionicons name="folder-open" size={18} color={Colors.white} />
+                <Text style={styles.buttonText}>
+                  {loading ? '選択中...' : 'フォルダを選択'}
                 </Text>
               </TouchableOpacity>
-            )}
-          </View>
+            </View>
+          )}
         </View>
+      </View>
 
-        <Text style={styles.settingDescription}>
-          「保存」したPDFファイルを移動するフォルダを指定してください。
-        </Text>
+      {/* 使い方 */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>使い方</Text>
+
+        <View style={styles.card}>
+          {[
+            { icon: 'finger-print', text: '右にスワイプ → 保存フォルダに移動' },
+            { icon: 'trash-outline', text: '左にスワイプ → ゴミ箱に移動' },
+            { icon: 'arrow-undo', text: '「元に戻す」 → 直前の操作を取り消し' },
+            { icon: 'folder-open-outline', text: 'ゴミ箱から復元可能' },
+          ].map((item, index) => (
+            <View key={index} style={styles.instructionRow}>
+              <Ionicons name={item.icon as any} size={20} color={Colors.primary} />
+              <Text style={styles.instructionText}>{item.text}</Text>
+            </View>
+          ))}
+        </View>
       </View>
 
       {/* アプリ情報 */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>アプリ情報</Text>
 
-        <View style={styles.infoCard}>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>アプリ名</Text>
-            <Text style={styles.infoValue}>PDF Flick</Text>
-          </View>
-          <View style={styles.divider} />
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>バージョン</Text>
-            <Text style={styles.infoValue}>1.0.0</Text>
-          </View>
-          <View style={styles.divider} />
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>開発者</Text>
-            <Text style={styles.infoValue}>Manus AI</Text>
-          </View>
+        <View style={styles.card}>
+          {[
+            { label: 'アプリ名', value: 'PDF Flick' },
+            { label: 'バージョン', value: '1.1.0' },
+            { label: '対象', value: 'Android 8.0+' },
+          ].map((item, index) => (
+            <View key={index} style={styles.infoRow}>
+              <Text style={styles.infoLabel}>{item.label}</Text>
+              <Text style={styles.infoValue}>{item.value}</Text>
+            </View>
+          ))}
         </View>
       </View>
-
-      {/* 使用方法 */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>使用方法</Text>
-
-        <View style={styles.instructionCard}>
-          <View style={styles.instructionItem}>
-            <View style={styles.instructionNumber}>
-              <Text style={styles.instructionNumberText}>1</Text>
-            </View>
-            <Text style={styles.instructionText}>
-              上記で保存先フォルダを設定してください
-            </Text>
-          </View>
-
-          <View style={styles.instructionItem}>
-            <View style={styles.instructionNumber}>
-              <Text style={styles.instructionNumberText}>2</Text>
-            </View>
-            <Text style={styles.instructionText}>
-              メイン画面でPDFをプレビューして確認
-            </Text>
-          </View>
-
-          <View style={styles.instructionItem}>
-            <View style={styles.instructionNumber}>
-              <Text style={styles.instructionNumberText}>3</Text>
-            </View>
-            <Text style={styles.instructionText}>
-              右にフリック（保存）または左にフリック（削除）
-            </Text>
-          </View>
-
-          <View style={styles.instructionItem}>
-            <View style={styles.instructionNumber}>
-              <Text style={styles.instructionNumberText}>4</Text>
-            </View>
-            <Text style={styles.instructionText}>
-              「元に戻す」で操作を取り消せます
-            </Text>
-          </View>
-        </View>
-      </View>
-
-      {/* フッター */}
-      <View style={styles.footer} />
     </ScrollView>
   );
 }
@@ -258,159 +195,129 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.light.background,
+    backgroundColor: Colors.muted,
   },
-  header: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.lg,
-    paddingBottom: Spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.light.border,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: Colors.light.foreground,
-    marginBottom: Spacing.sm,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: Colors.light.mutedForeground,
+  contentContainer: {
+    padding: Spacing.md,
+    paddingBottom: Spacing['2xl'],
   },
   section: {
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.light.border,
+    marginBottom: Spacing.lg,
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 13,
     fontWeight: '600',
-    color: Colors.light.foreground,
-    marginBottom: Spacing.md,
-  },
-  settingCard: {
-    backgroundColor: Colors.light.muted,
-    borderRadius: BorderRadius.md,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.md,
-    marginBottom: Spacing.md,
-  },
-  settingLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: Colors.light.foreground,
+    color: Colors.mutedForeground,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
     marginBottom: Spacing.sm,
+    marginLeft: Spacing.xs,
   },
-  folderPathContainer: {
+  card: {
+    backgroundColor: Colors.white,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.md,
+    ...Shadows.sm,
+  },
+  folderSelected: {
+    gap: Spacing.md,
+  },
+  folderInfo: {
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.light.background,
-    borderRadius: BorderRadius.sm,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.md,
-    marginBottom: Spacing.md,
-    gap: Spacing.sm,
+    alignItems: 'flex-start',
+    gap: Spacing.md,
+  },
+  folderTextContainer: {
+    flex: 1,
+  },
+  folderLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.success,
+    marginBottom: 2,
   },
   folderPath: {
-    flex: 1,
     fontSize: 12,
-    color: Colors.light.foreground,
+    color: Colors.mutedForeground,
+    fontFamily: 'monospace',
   },
-  noFolderText: {
-    fontSize: 14,
-    color: Colors.light.mutedForeground,
-    fontStyle: 'italic',
-    marginBottom: Spacing.md,
-  },
-  buttonGroup: {
+  folderActions: {
     flexDirection: 'row',
     gap: Spacing.sm,
   },
-  settingButton: {
+  folderNotSet: {
+    alignItems: 'center',
+    paddingVertical: Spacing.lg,
+    gap: Spacing.sm,
+  },
+  folderNotSetText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: Colors.foreground,
+    marginTop: Spacing.sm,
+  },
+  folderNotSetSubtext: {
+    fontSize: 13,
+    color: Colors.mutedForeground,
+    textAlign: 'center',
+    lineHeight: 20,
+    paddingHorizontal: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  button: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: Spacing.md,
-    borderRadius: BorderRadius.sm,
-    borderWidth: 1,
-    gap: Spacing.sm,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.md,
+    gap: Spacing.xs,
   },
   selectButton: {
-    backgroundColor: Colors.light.background,
-    borderColor: Colors.light.secondary,
+    backgroundColor: Colors.primary,
+    paddingHorizontal: Spacing.xl,
+    flex: 0,
+  },
+  changeButton: {
+    backgroundColor: Colors.primary,
   },
   clearButton: {
-    backgroundColor: Colors.light.background,
-    borderColor: Colors.light.error,
+    backgroundColor: Colors.error,
   },
-  settingButtonText: {
-    fontSize: 12,
+  buttonText: {
+    color: Colors.white,
     fontWeight: '600',
+    fontSize: 14,
   },
-  settingDescription: {
-    fontSize: 12,
-    color: Colors.light.mutedForeground,
-    marginTop: Spacing.sm,
+  instructionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
   },
-  infoCard: {
-    backgroundColor: Colors.light.muted,
-    borderRadius: BorderRadius.md,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.md,
+  instructionText: {
+    fontSize: 14,
+    color: Colors.foreground,
+    flex: 1,
   },
   infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: Spacing.md,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: Colors.light.border,
+    paddingVertical: Spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
   },
   infoLabel: {
     fontSize: 14,
-    color: Colors.light.mutedForeground,
+    color: Colors.mutedForeground,
   },
   infoValue: {
     fontSize: 14,
-    fontWeight: '600',
-    color: Colors.light.foreground,
-  },
-  instructionCard: {
-    backgroundColor: Colors.light.muted,
-    borderRadius: BorderRadius.md,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.md,
-  },
-  instructionItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: Spacing.md,
-    gap: Spacing.md,
-  },
-  instructionNumber: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: Colors.light.secondary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  instructionNumberText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: Colors.light.background,
-  },
-  instructionText: {
-    flex: 1,
-    fontSize: 14,
-    color: Colors.light.foreground,
-    marginTop: Spacing.xs,
-  },
-  footer: {
-    height: Spacing.xl,
+    fontWeight: '500',
+    color: Colors.foreground,
   },
 });

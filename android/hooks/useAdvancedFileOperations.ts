@@ -1,6 +1,5 @@
 import { useState, useCallback } from 'react';
 import * as FileSystem from 'expo-file-system';
-import { Paths } from 'expo-file-system';
 
 /**
  * ファイル操作の結果インターフェース
@@ -42,7 +41,8 @@ export const useAdvancedFileOperations = () => {
    * ゴミ箱ディレクトリのパスを取得
    */
   const getTrashDir = useCallback(async (): Promise<string> => {
-    const trashDir = new FileSystem.File(Paths.document, 'Trash').uri + '/';
+    // アプリ内部ストレージにゴミ箱を作成（外部ストレージ権限不要）
+    const trashDir = (FileSystem.documentDirectory ?? '') + 'trash/';
     const dirInfo = await FileSystem.getInfoAsync(trashDir);
 
     if (!dirInfo.exists) {
@@ -287,8 +287,8 @@ export const useAdvancedFileOperations = () => {
           return {
             name: filename,
             path: filePath,
-            size: fileInfo.size || 0,
-            modifiedDate: fileInfo.modificationTime ? fileInfo.modificationTime * 1000 : 0,
+            size: (fileInfo as any).size ?? 0,
+            modifiedDate: (fileInfo as any).modificationTime ? (fileInfo as any).modificationTime * 1000 : 0,
           };
         })
       );

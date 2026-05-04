@@ -94,11 +94,11 @@ export default function TrashScreen() {
    */
   const handleRestore = async (trashPath: string, originalFileName: string) => {
     try {
-      // 元のファイルパスを推測（ゴミ箱ファイル名から）
-      const fileName = originalFileName.split('_').slice(1).join('_');
-      const downloadDir = '/path/to/Downloads/'; // 実装時に正しいパスに置き換え
+      // タイムスタンププレフィックスを除いた元ファイル名を取得
+      const fileName = originalFileName.replace(/^\d+_/, '');
+      const downloadDir = 'file:///storage/emulated/0/Download/';
 
-      Alert.alert('確認', `ファイルを復元しますか?`, [
+      Alert.alert('確認', `「${fileName}」を復元しますか?`, [
         { text: 'キャンセル' },
         {
           text: '復元',
@@ -433,7 +433,7 @@ const styles = StyleSheet.create({
   },
   fileCount: {
     fontSize: 14,
-    color: Colors.muted,
+    color: Colors.mutedForeground,
   },
   centerContent: {
     flex: 1,
@@ -442,7 +442,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 14,
-    color: Colors.muted,
+    color: Colors.mutedForeground,
     marginTop: Spacing.md,
   },
   errorText: {
@@ -453,7 +453,7 @@ const styles = StyleSheet.create({
   },
   errorDetail: {
     fontSize: 12,
-    color: Colors.muted,
+    color: Colors.mutedForeground,
     marginTop: Spacing.sm,
     textAlign: 'center',
     paddingHorizontal: Spacing.md,
@@ -471,7 +471,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 16,
-    color: Colors.muted,
+    color: Colors.mutedForeground,
     marginTop: Spacing.md,
   },
   listContent: {
@@ -482,7 +482,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: Colors.card,
+    backgroundColor: Colors.white,
     borderRadius: BorderRadius.md,
     padding: Spacing.md,
     ...Shadows.sm,
@@ -511,7 +511,7 @@ const styles = StyleSheet.create({
   },
   trashItemMeta: {
     fontSize: 12,
-    color: Colors.muted,
+    color: Colors.mutedForeground,
   },
   trashItemActions: {
     flexDirection: 'row',
