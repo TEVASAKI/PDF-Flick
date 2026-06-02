@@ -1,4 +1,61 @@
-# PDF Flick - Android 版 更新履歴
+# PDF Flick Android - 更新履歴
+
+---
+
+## [1.1.0] - 2026-06-02
+
+### 修正（Fixed）
+
+#### ビルド・型エラー
+- `expo-file-system` v55 の API 変更に対応。全ファイルで `expo-file-system/legacy` からインポートするよう変更
+  - `hooks/usePDFFiles.ts`
+  - `hooks/useAdvancedFileOperations.ts`
+  - `hooks/usePDFPreview.ts`
+  - `app/settings.tsx`
+- `getInfoAsync` の非対応オプション `{ size: true }` を削除
+- `Colors.light.icon` → `Colors.light.primary` に修正（`collapsible.tsx`）
+- `Colors.text` → `Colors.foreground` に修正（`themed-text.tsx`）
+
+#### パス・API
+- Downloads フォルダパスを `Paths.document + 'Downloads'`（アプリ内部ストレージ）から `file:///storage/emulated/0/Download/`（実際の外部Downloadsフォルダ）に修正
+- `useAdvancedFileOperations.ts`: `Paths` import を削除し、`FileSystem.documentDirectory` ベースのゴミ箱パスに変更
+- `app/settings.tsx`: `expo-document-picker` を削除し、`StorageAccessFramework.requestDirectoryPermissionsAsync()` に変更
+
+#### ナビゲーション
+- タブナビゲーション（`(tabs)/`）を Stack ナビゲーションに変更
+- `app/_layout.tsx` を `Stack`（index / settings / trash）構成に刷新
+
+#### 状態管理
+- `app/index.tsx`: `processedFiles` state（`useState<Set<string>>`）を追加
+- `app/index.tsx`: `restoreFromTrash`、`refresh` を適切に import・使用
+
+### 追加（Added）
+
+- `app/index.tsx`: ランタイムストレージ権限リクエスト（`PermissionsAndroid.requestMultiple`）を起動時に実行
+- `app/trash.tsx`: ゴミ箱からDownloadsフォルダへの復元を実装（`file:///storage/emulated/0/Download/`）
+- `constants/theme.ts`: `Colors.white`, `Colors.black` など直接参照用フラットエイリアスを追加
+- `app.json`: `"package": "com.pdfflick.app"` および必要な Android 権限を追加
+- `eas.json`: EAS Build 設定（`preview` プロファイルで APK 生成）を追加
+- `android/android/`: `npx expo prebuild --platform android --clean` で生成したネイティブプロジェクトを追加
+
+### 削除（Removed）
+
+- `app/(tabs)/` ディレクトリ（タブナビゲーション構成）を削除
+- `app/index-enhanced.tsx`（index.tsx にマージ済み）を削除
+- `app/modal.tsx`（未使用）を削除
+- `import { Paths } from 'expo-file-system'`（v55 で削除された API）を全ファイルから除去
+
+### テスト結果（v1.1.0）
+
+| 項目 | 結果 |
+|------|------|
+| TypeScript（通常・strict） | ✅ エラー 0 |
+| Expo Lint | ✅ エラー 0 / 警告 5（未使用変数、軽微） |
+| Android バンドルビルド | ✅ 2.96 MB 生成成功 |
+| API 整合性 | ✅ 全 hook・screen の import/export 確認済み |
+| AndroidManifest 権限 | ✅ 7権限すべて反映確認済み |
+
+詳細は [`docs/verification-report.md`](../docs/verification-report.md) を参照。
 
 ---
 
@@ -7,198 +64,41 @@
 ### 追加（Added）
 
 #### コア機能
-- **ダウンロードフォルダスキャン機能**: PDFファイルの自動検出と一覧表示
-- **PDFプレビュー表示**: 最初のページをプレビュー画像として表示
-- **フリック操作**: 左右のフリックで「削除」「保存」を実行
-- **Undo機能**: 直前の操作を取り消し
-- **保存先フォルダ設定**: ユーザーが保存先フォルダを指定可能
+- ダウンロードフォルダスキャン機能（PDFファイルの自動検出と一覧表示）
+- PDFプレビュー表示（`usePDFPreview` による Base64 プレビュー生成）
+- フリック操作（左右のフリックで「削除」「保存」を実行）
+- Undo 機能（`useUndoHistory` による直前操作の取り消し）
+- 保存先フォルダ設定（`expo-document-picker` によるフォルダ選択）
 
 #### UI/UX
-- **エレガント・プロフェッショナル型デザイン**: 落ち着いた配色と非対称レイアウト
-- **メイン画面**: PDFプレビュー、フリックガイド、操作ボタン
-- **設定画面**: 保存先フォルダ設定、アプリ情報、使用方法
-- **完了画面**: 処理済み件数の表示
+- エレガント・プロフェッショナル型デザイン（白背景・墨色テキスト・深緑/薄紅アクセント）
+- メイン画面（PDFカード・フリックガイド・操作ボタン）
+- 設定画面（保存先フォルダ設定・アプリ情報・使い方）
+- 完了画面（処理済み件数の統計表示）
 
-#### 技術実装
-- React Native (Expo) によるクロスプラットフォーム開発
-- TypeScript による型安全な実装
-- カスタムフック（`usePDFFiles`, `usePDFPreview`, `useUndoHistory`）
-- PanResponder によるジェスチャー検出
-- expo-file-system によるファイルシステムアクセス
+#### 技術基盤
+- React Native (Expo) + TypeScript による実装
+- `PanResponder` によるジェスチャー検出（閾値 50px）
+- カスタムフック: `usePDFFiles`, `usePDFPreview`, `useUndoHistory`
 
 #### ドキュメント
-- セットアップガイド（ANDROID_SETUP.md）
-- README（README_ANDROID.md）
-- 仕様説明書（SPECIFICATION_ANDROID.md）
-- 更新履歴（本ファイル）
+- `README_ANDROID.md`, `SPECIFICATION_ANDROID.md`, `ANDROID_SETUP.md` 初版
 
-### 変更（Changed）
+### 既知の問題（v1.0.0 時点）
 
-- なし（初版リリース）
-
-### 削除（Removed）
-
-- なし（初版リリース）
-
-### 修正（Fixed）
-
-- なし（初版リリース）
-
-### 既知の問題（Known Issues）
-
-- **PDFプレビュー生成**: 現在は簡易的な実装。大きなPDFファイルの場合、プレビュー生成に時間がかかる可能性あり
-- **メモリ使用量**: プレビュー画像のキャッシュがメモリに蓄積される可能性あり。今後、キャッシュサイズを制限する予定
-- **ファイルアクセス権限**: Android 11以上では、ファイルアクセス権限の取得方法が異なる可能性あり
-
-### 今後の改善予定
-
-#### 短期（v1.1）
-- ダークモード対応
-- 複数の保存先フォルダ設定
-- ファイルタグ機能
-- 検索機能
-
-#### 中期（v1.2）
-- クラウドストレージ連携（Google Drive, Dropbox等）
-- バッチ処理（複数ファイルの一括操作）
-- 自動整理ルール（日付別、名前別等）
-- 詳細ファイル情報表示（ファイルサイズ、作成日時等）
-
-#### 長期（v2.0）
-- AI による自動分類
-- 複数デバイス同期
-- Web版との連携
-- デスクトップアプリ版
+- Downloads パスがアプリ内部ストレージを参照していた（→ v1.1.0 で修正）
+- `expo-file-system` v55 の API 変更未対応（→ v1.1.0 で修正）
+- タブナビゲーション構成が不要（→ v1.1.0 で Stack に変更）
 
 ---
 
 ## 開発環境
 
-### 使用技術
-
-| 項目 | バージョン |
-|------|-----------|
-| Node.js | 22.13.0 |
-| npm | 10.9.2 |
+| ツール | バージョン |
+|--------|-----------|
+| Node.js | 22.x |
+| npm | 10.x |
 | React Native | 0.81.5 |
-| Expo | 54.0.33 |
+| Expo SDK | 54.0.33 |
 | TypeScript | 5.9.2 |
-
-### 依存パッケージ
-
-- `expo-file-system`: ファイルシステムアクセス
-- `expo-document-picker`: ドキュメントピッカー
-- `react-native-pdf`: PDFレンダリング
-- `@expo/vector-icons`: アイコン表示
-
----
-
-## リリース情報
-
-### バージョン 1.0.0
-
-**リリース日**: 2026年3月2日
-
-**対応OS**: Android 8.0 以上
-
-**ダウンロード**: [Google Play Store](https://play.google.com/store) （準備中）
-
-**変更ログ**: 本ファイルを参照
-
----
-
-## 貢献ガイドライン
-
-### バグ報告
-
-バグを発見した場合は、以下の情報を含めて報告してください。
-
-- バージョン番号
-- 発生した環境（デバイス、OSバージョン）
-- 再現手順
-- 期待される動作
-- 実際の動作
-- スクリーンショット（可能な場合）
-
-### 機能リクエスト
-
-新しい機能をリクエストする場合は、以下の情報を含めてください。
-
-- 機能の説明
-- ユースケース
-- 期待される利点
-- 参考資料（他のアプリの例等）
-
----
-
-## サポート
-
-### よくある質問（FAQ）
-
-**Q1: アプリが起動しません**
-
-A: 以下を確認してください。
-1. Android 8.0以上のデバイスを使用しているか
-2. ストレージの空き容量が十分か
-3. アプリの権限が許可されているか
-
-**Q2: PDFプレビューが表示されません**
-
-A: 以下を確認してください。
-1. ダウンロードフォルダにPDFファイルが存在するか
-2. PDFファイルが破損していないか
-3. メモリが不足していないか
-
-**Q3: ファイルが削除されません**
-
-A: 以下を確認してください。
-1. ファイルがロックされていないか
-2. ストレージの空き容量が十分か
-3. ファイルアクセス権限が許可されているか
-
-### サポート連絡先
-
-- **メール**: support@manus.ai
-- **Twitter**: @ManusPDF
-- **GitHub Issues**: [PDF Flick Issues](https://github.com/manus-ai/pdf-flick/issues)
-
----
-
-## ライセンス
-
-MIT License
-
----
-
-## 謝辞
-
-このプロジェクトは、以下のオープンソースプロジェクトを使用しています。
-
-- [React Native](https://reactnative.dev/)
-- [Expo](https://expo.dev/)
-- [TypeScript](https://www.typescriptlang.org/)
-
----
-
-## 作成者
-
-**Manus AI**
-
-- **公式サイト**: https://manus.ai
-- **Twitter**: @ManusPDF
-- **GitHub**: https://github.com/manus-ai
-
----
-
-## 変更ログ形式について
-
-このファイルは [Keep a Changelog](https://keepachangelog.com/) の形式に従っています。
-
-セクション：
-- **Added**: 新しい機能
-- **Changed**: 既存機能の変更
-- **Deprecated**: 非推奨機能
-- **Removed**: 削除された機能
-- **Fixed**: バグ修正
-- **Security**: セキュリティ関連の修正
-
+| EAS CLI | 20.0.0 |

@@ -1,44 +1,42 @@
-# PDF Flick - テスト・デバッグガイド
+# PDF Flick Android - テスト・デバッグガイド
 
-**作成日**: 2026年3月2日  
-**バージョン**: 1.0.0  
-**対象**: React Native Android版
-
----
-
-## 目次
-
-1. [テスト戦略](#テスト戦略)
-2. [ユニットテスト](#ユニットテスト)
-3. [統合テスト](#統合テスト)
-4. [UIテスト](#uitest)
-5. [デバッグテクニック](#デバッグテクニック)
-6. [トラブルシューティング](#トラブルシューティング)
+**更新日**: 2026年6月2日  
+**バージョン**: 1.1.0
 
 ---
 
-## テスト戦略
+## 現在のテスト状況
 
-### テストピラミッド
+| テスト種別 | 状態 | コマンド |
+|-----------|------|---------|
+| TypeScript 型チェック | ✅ エラー 0 | `npx tsc --noEmit` |
+| TypeScript strict チェック | ✅ エラー 0 | `npx tsc --noEmit --strict` |
+| Expo Lint | ✅ エラー 0 / 警告 5 | `npx expo lint` |
+| Android バンドルビルド | ✅ 成功 (2.96 MB) | `npx expo export --platform android` |
+| ユニットテスト | ⚠️ 未整備 | — |
 
+---
+
+## 静的解析の実行
+
+```bash
+cd android
+
+# TypeScript 型チェック
+npx tsc --noEmit
+
+# Expo Lint（ESLint）
+npx expo lint
+
+# バンドルビルド確認
+npx expo export --platform android
 ```
-        E2E テスト
-      統合テスト
-    ユニットテスト
-```
-
-### テスト対象
-
-| 対象 | テスト種別 | 優先度 |
-|------|----------|--------|
-| Undo/Redo機能 | ユニット | 🔴 高 |
-| ファイル操作 | 統合 | 🔴 高 |
-| ゴミ箱機能 | 統合 | 🟡 中 |
-| UI/UX | E2E | 🟡 中 |
 
 ---
 
 ## ユニットテスト
+
+> **前提**: `jest` および `@testing-library/react-native` のセットアップが必要です。
 
 ### `useUndoRedoHistory` のテスト
 
@@ -56,15 +54,14 @@ describe('useUndoRedoHistory', () => {
         action: 'keep',
         fileId: 'file-1',
         fileName: 'test.pdf',
-        filePath: '/path/to/test.pdf',
+        filePath: 'file:///storage/emulated/0/Download/test.pdf',
       });
     });
 
-    expect(result.current.getUndoSize()).toBe(1);
     expect(result.current.canUndo()).toBe(true);
   });
 
-  it('Undo機能が動作する', () => {
+  it('Undo が動作する', () => {
     const { result } = renderHook(() => useUndoRedoHistory());
 
     act(() => {
@@ -72,76 +69,34 @@ describe('useUndoRedoHistory', () => {
         action: 'keep',
         fileId: 'file-1',
         fileName: 'test.pdf',
-        filePath: '/path/to/test.pdf',
+        filePath: 'file:///storage/emulated/0/Download/test.pdf',
       });
     });
 
+    let entry;
     act(() => {
-      result.current.undo();
+      entry = result.current.undo();
     });
 
-    expect(result.current.getUndoSize()).toBe(0);
-    expect(result.current.canRedo()).toBe(true);
+    expect(entry).not.toBeNull();
+    expect(result.current.canUndo()).toBe(false);
   });
 
-  it('Redo機能が動作する', () => {
-    const { result } = renderHook(() => useUndoRedoHistory());
-
-    act(() => {
-      result.current.addToHistory({
-        action: 'delete',
-        fileId: 'file-1',
-        fileName: 'test.pdf',
-        filePath: '/path/to/test.pdf',
-      });
-    });
-
-    act(() => {
-      result.current.undo();
-      result.current.redo();
-    });
-
-    expect(result.current.getUndoSize()).toBe(1);
-    expect(result.current.canRedo()).toBe(false);
-  });
-
-  it('複数ステップUndo/Redoが動作する', () => {
-    const { result } = renderHook(() => useUndoRedoHistory());
-
-    act(() => {
-      for (let i = 0; i < 5; i++) {
-        result.current.addToHistory({
-          action: i % 2 === 0 ? 'keep' : 'delete',
-          fileId: `file-${i}`,
-          fileName: `test${i}.pdf`,
-          filePath: `/path/to/test${i}.pdf`,
-        });
-      }
-    });
-
-    act(() => {
-      result.current.undoMultiple(3);
-    });
-
-    expect(result.current.getUndoSize()).toBe(2);
-    expect(result.current.getRedoSize()).toBe(3);
-  });
-
-  it('統計情報が正確である', () => {
+  it('統計情報が正確', () => {
     const { result } = renderHook(() => useUndoRedoHistory());
 
     act(() => {
       result.current.addToHistory({
         action: 'keep',
-        fileId: 'file-1',
-        fileName: 'test1.pdf',
-        filePath: '/path/to/test1.pdf',
+        fileId: 'f1',
+        fileName: 'a.pdf',
+        filePath: 'file:///storage/emulated/0/Download/a.pdf',
       });
       result.current.addToHistory({
         action: 'delete',
-        fileId: 'file-2',
-        fileName: 'test2.pdf',
-        filePath: '/path/to/test2.pdf',
+        fileId: 'f2',
+        fileName: 'b.pdf',
+        filePath: 'file:///storage/emulated/0/Download/b.pdf',
       });
     });
 
@@ -159,84 +114,116 @@ describe('useUndoRedoHistory', () => {
 // hooks/__tests__/useAdvancedFileOperations.test.ts
 import { renderHook, act, waitFor } from '@testing-library/react-native';
 import { useAdvancedFileOperations } from '../useAdvancedFileOperations';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 
-// FileSystem API をモック
-jest.mock('expo-file-system');
+jest.mock('expo-file-system/legacy');
 
 describe('useAdvancedFileOperations', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
+  beforeEach(() => jest.clearAllMocks());
 
   it('ファイルを移動できる', async () => {
+    (FileSystem.getInfoAsync as jest.Mock).mockResolvedValue({ exists: false });
+    (FileSystem.copyAsync as jest.Mock).mockResolvedValue(undefined);
+    (FileSystem.deleteAsync as jest.Mock).mockResolvedValue(undefined);
+
     const { result } = renderHook(() => useAdvancedFileOperations());
 
-    const mockCopy = jest.fn().mockResolvedValue(undefined);
-    const mockDelete = jest.fn().mockResolvedValue(undefined);
-    const mockGetInfo = jest.fn().mockResolvedValue({ exists: true });
-
-    (FileSystem.copyAsync as jest.Mock) = mockCopy;
-    (FileSystem.deleteAsync as jest.Mock) = mockDelete;
-    (FileSystem.getInfoAsync as jest.Mock) = mockGetInfo;
-
-    let moveResult;
-    act(() => {
-      moveResult = result.current.moveFile('/source/file.pdf', '/dest/');
-    });
-
-    await waitFor(() => {
-      expect(moveResult).resolves.toEqual(
-        expect.objectContaining({
-          success: true,
-        })
+    let moveResult: any;
+    await act(async () => {
+      moveResult = await result.current.moveFile(
+        'file:///storage/emulated/0/Download/test.pdf',
+        'content://com.android.externalstorage.documents/tree/...'
       );
     });
 
-    expect(mockCopy).toHaveBeenCalled();
-    expect(mockDelete).toHaveBeenCalled();
+    expect(moveResult.success).toBe(true);
   });
 
-  it('ファイルをゴミ箱に移動できる', async () => {
+  it('ゴミ箱への移動が動作する', async () => {
+    (FileSystem.getInfoAsync as jest.Mock).mockResolvedValue({ exists: false });
+    (FileSystem.makeDirectoryAsync as jest.Mock).mockResolvedValue(undefined);
+    (FileSystem.copyAsync as jest.Mock).mockResolvedValue(undefined);
+    (FileSystem.deleteAsync as jest.Mock).mockResolvedValue(undefined);
+
     const { result } = renderHook(() => useAdvancedFileOperations());
 
-    let moveToTrashResult;
-    act(() => {
-      moveToTrashResult = result.current.moveToTrash('/path/to/file.pdf');
-    });
-
-    await waitFor(() => {
-      expect(moveToTrashResult).resolves.toEqual(
-        expect.objectContaining({
-          success: true,
-          data: expect.objectContaining({
-            trashPath: expect.any(String),
-          }),
-        })
+    let trashResult: any;
+    await act(async () => {
+      trashResult = await result.current.moveToTrash(
+        'file:///storage/emulated/0/Download/test.pdf'
       );
     });
+
+    expect(trashResult.success).toBe(true);
+    expect(trashResult.data.trashPath).toContain('trash/');
   });
 
-  it('エラーハンドリングが正常に動作する', async () => {
+  it('エラー時に success: false を返す', async () => {
+    (FileSystem.getInfoAsync as jest.Mock).mockRejectedValue(new Error('Permission denied'));
+
     const { result } = renderHook(() => useAdvancedFileOperations());
 
-    (FileSystem.getInfoAsync as jest.Mock).mockRejectedValue(
-      new Error('File not found')
+    let moveResult: any;
+    await act(async () => {
+      moveResult = await result.current.moveFile(
+        'file:///storage/emulated/0/Download/test.pdf',
+        '/dest/'
+      );
+    });
+
+    expect(moveResult.success).toBe(false);
+    expect(moveResult.error).toBeTruthy();
+  });
+});
+```
+
+### `usePDFFiles` のテスト
+
+```typescript
+// hooks/__tests__/usePDFFiles.test.ts
+import { renderHook, waitFor } from '@testing-library/react-native';
+import { usePDFFiles } from '../usePDFFiles';
+import * as FileSystem from 'expo-file-system/legacy';
+
+jest.mock('expo-file-system/legacy');
+
+const DOWNLOADS_DIR = 'file:///storage/emulated/0/Download/';
+
+describe('usePDFFiles', () => {
+  it('PDFファイルのみを返す', async () => {
+    (FileSystem.getInfoAsync as jest.Mock).mockResolvedValue({ exists: true });
+    (FileSystem.readDirectoryAsync as jest.Mock).mockResolvedValue([
+      'report.pdf',
+      'image.jpg',
+      '.hidden.pdf',
+      'doc.PDF',
+    ]);
+
+    const { result } = renderHook(() => usePDFFiles());
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    // .jpg と隠しファイルは除外される
+    expect(result.current.files.map((f) => f.name)).toEqual(
+      expect.arrayContaining(['report.pdf', 'doc.PDF'])
     );
+    expect(result.current.files.map((f) => f.name)).not.toContain('image.jpg');
+    expect(result.current.files.map((f) => f.name)).not.toContain('.hidden.pdf');
+  });
 
-    let moveResult;
-    act(() => {
-      moveResult = result.current.moveFile('/nonexistent/file.pdf', '/dest/');
-    });
+  it('ディレクトリが存在しない場合はエラーを返す', async () => {
+    (FileSystem.getInfoAsync as jest.Mock).mockResolvedValue({ exists: false });
+
+    const { result } = renderHook(() => usePDFFiles());
 
     await waitFor(() => {
-      expect(moveResult).resolves.toEqual(
-        expect.objectContaining({
-          success: false,
-          error: expect.any(String),
-        })
-      );
+      expect(result.current.loading).toBe(false);
     });
+
+    expect(result.current.error).toBeTruthy();
+    expect(result.current.files).toHaveLength(0);
   });
 });
 ```
@@ -245,250 +232,123 @@ describe('useAdvancedFileOperations', () => {
 
 ## 統合テスト
 
-### ファイル操作フロー
+### フリック操作 → ファイル移動フロー
 
 ```typescript
-// __tests__/integration/fileOperationFlow.test.ts
-describe('ファイル操作フロー', () => {
-  it('ファイルを保存してから削除できる', async () => {
+// __tests__/integration/swipeFlow.test.ts
+describe('スワイプ操作フロー', () => {
+  it('右スワイプで保存先に移動 → Undo で元に戻る', async () => {
+    const { moveFile } = useAdvancedFileOperations();
+    const { addToHistory, undo } = useUndoRedoHistory();
+
+    const sourcePath = 'file:///storage/emulated/0/Download/test.pdf';
+    const destFolder = 'content://...';
+
     // 1. ファイルを保存フォルダに移動
-    const moveResult = await moveFile(sourcePath, destinationFolder);
+    const moveResult = await moveFile(sourcePath, destFolder);
     expect(moveResult.success).toBe(true);
 
-    // 2. 操作を履歴に追加
+    // 2. 履歴に記録
     addToHistory({
       action: 'keep',
-      fileId: 'file-1',
+      fileId: 'test.pdf',
       fileName: 'test.pdf',
       filePath: sourcePath,
-      metadata: { destinationPath: destinationFolder },
+      metadata: { destinationPath: destFolder },
     });
 
     // 3. Undo
-    const undoResult = undo();
-    expect(undoResult).not.toBeNull();
-
-    // 4. ファイルを元の位置に戻す
-    const restoreResult = await moveFile(destinationPath, originalFolder);
-    expect(restoreResult.success).toBe(true);
+    const entry = undo();
+    expect(entry).not.toBeNull();
+    expect(entry?.action).toBe('keep');
   });
 
-  it('ゴミ箱機能が正常に動作する', async () => {
-    // 1. ファイルをゴミ箱に移動
+  it('左スワイプでゴミ箱移動 → Undo で復元', async () => {
+    const { moveToTrash, restoreFromTrash } = useAdvancedFileOperations();
+
+    const filePath = 'file:///storage/emulated/0/Download/test.pdf';
+
     const trashResult = await moveToTrash(filePath);
     expect(trashResult.success).toBe(true);
 
-    // 2. ゴミ箱内のファイルを確認
-    const trashFiles = await getTrashFiles();
-    expect(trashFiles.success).toBe(true);
-    expect(trashFiles.data.length).toBeGreaterThan(0);
-
-    // 3. ファイルを復元
     const restoreResult = await restoreFromTrash(
       trashResult.data.trashPath,
       filePath
     );
     expect(restoreResult.success).toBe(true);
-
-    // 4. ゴミ箱が空になったことを確認
-    const emptyTrashResult = await emptyTrash();
-    expect(emptyTrashResult.success).toBe(true);
   });
 });
 ```
 
 ---
 
-## UIテスト
+## デバッグ手法
 
-### フリック操作のテスト
-
-```typescript
-// __tests__/ui/flickOperation.test.ts
-import { render, fireEvent } from '@testing-library/react-native';
-import PDFFlickEnhancedScreen from '@/app/index-enhanced';
-
-describe('フリック操作', () => {
-  it('右フリックで保存ボタンが動作する', async () => {
-    const { getByTestId } = render(<PDFFlickEnhancedScreen />);
-
-    const card = getByTestId('pdf-card');
-
-    // 右フリック（50px以上）
-    fireEvent(card, 'panResponderMove', {
-      nativeEvent: { dx: 100 },
-    });
-
-    fireEvent(card, 'panResponderRelease', {
-      nativeEvent: { dx: 100 },
-    });
-
-    // 保存ボタンが呼ばれたことを確認
-    // 実装に応じて検証
-  });
-
-  it('左フリックで削除ボタンが動作する', async () => {
-    const { getByTestId } = render(<PDFFlickEnhancedScreen />);
-
-    const card = getByTestId('pdf-card');
-
-    // 左フリック（-50px以下）
-    fireEvent(card, 'panResponderMove', {
-      nativeEvent: { dx: -100 },
-    });
-
-    fireEvent(card, 'panResponderRelease', {
-      nativeEvent: { dx: -100 },
-    });
-
-    // 削除ボタンが呼ばれたことを確認
-  });
-
-  it('Undoボタンが動作する', async () => {
-    const { getByTestId } = render(<PDFFlickEnhancedScreen />);
-
-    const undoButton = getByTestId('undo-button');
-
-    fireEvent.press(undoButton);
-
-    // Undo処理が実行されたことを確認
-  });
-});
-```
-
----
-
-## デバッグテクニック
-
-### ログ出力
-
-```typescript
-// デバッグ用ログ出力
-console.log('Undo Stack:', undoStack);
-console.log('Redo Stack:', redoStack);
-console.log('Operation State:', operationState);
-console.log('Statistics:', getStatistics());
-```
-
-### React DevTools
+### adb でのログ確認
 
 ```bash
-# React DevTools をインストール
-npm install --save-dev @react-devtools/core
+# PDF Flick 関連のログを表示
+adb logcat | grep -E "PDF Flick|ReactNative|expo"
 
-# デバッグ実行
-npm run dev
+# ファイルシステム操作のログ
+adb logcat | grep -E "FileSystem|Storage"
 ```
 
-### Android Studio デバッガ
+### Expo Dev Tools
 
 ```bash
-# Android Studio でブレークポイント設定
-# Logcat でログを確認
-adb logcat | grep "PDF Flick"
+cd android
+npx expo start --dev-client
 ```
 
 ### パフォーマンス計測
 
 ```typescript
-// パフォーマンス計測
-const startTime = performance.now();
+const t0 = performance.now();
+const result = await moveFile(src, dest);
+console.log(`moveFile: ${(performance.now() - t0).toFixed(0)}ms`);
+```
 
-// 処理
-const result = await moveFile(source, dest);
+---
 
-const endTime = performance.now();
-console.log(`File operation took ${endTime - startTime}ms`);
+## API 整合性チェック（手動）
+
+```bash
+cd android
+
+# expo-file-system/legacy を使っているか確認
+grep -rn "from 'expo-file-system'" app/ hooks/ components/
+# → 出力なしが正常（すべて /legacy を使用）
+
+# 廃止 Paths API の残存確認
+grep -rn "Paths\." app/ hooks/
+# → 出力なしが正常
+
+# 存在しない Colors キーの参照確認
+grep -rn "Colors\.\(card\|tint\|icon\|text\b\)" app/ hooks/ components/
+# → 出力なしが正常
 ```
 
 ---
 
 ## トラブルシューティング
 
-### テストが失敗する場合
-
-**症状**: `TypeError: Cannot read property 'copyAsync' of undefined`
-
-**原因**: FileSystem API がモックされていない
-
-**対応**:
-```typescript
-jest.mock('expo-file-system');
-```
-
-### パフォーマンスが低下する場合
-
-**症状**: 大量のファイルで操作が遅い
-
-**原因**: 履歴サイズが大きすぎる
-
-**対応**:
-```typescript
-const { addToHistory } = useUndoRedoHistory(20); // 50 から 20 に削減
-```
-
-### Undo/Redo が動作しない場合
-
-**症状**: Undo ボタンが常に無効
-
-**原因**: 操作履歴が追加されていない
-
-**対応**:
-```typescript
-// 操作後に必ず addToHistory を呼び出す
-addToHistory({
-  action: 'keep',
-  fileId: file.id,
-  fileName: file.name,
-  filePath: file.path,
-});
-```
-
----
-
-## テスト実行コマンド
-
-```bash
-# すべてのテストを実行
-npm test
-
-# 特定のテストファイルを実行
-npm test -- useUndoRedoHistory.test.ts
-
-# カバレッジレポートを生成
-npm test -- --coverage
-
-# ウォッチモードで実行
-npm test -- --watch
-```
+| 問題 | 原因 | 対処 |
+|------|------|------|
+| `TypeError: copyAsync is not a function` | FileSystem のモックが不足 | `jest.mock('expo-file-system/legacy')` を追加 |
+| Undo ボタンが常に無効 | `addToHistory` が呼ばれていない | 操作後に必ず `addToHistory` を呼んでいるか確認 |
+| Downloads フォルダが空 | テスト環境でパスが存在しない | `getInfoAsync` をモックして `exists: true` を返す |
+| TypeScript エラー | `expo-file-system` の import | `expo-file-system/legacy` に変更する |
 
 ---
 
 ## テストカバレッジ目標
 
-| 対象 | 目標 |
-|------|------|
-| ステートメント | 80% |
-| ブランチ | 75% |
-| 関数 | 80% |
-| 行 | 80% |
-
----
-
-## ベストプラクティス
-
-### ✅ 推奨事項
-
-1. **各機能に対してテストを作成**
-2. **エッジケースをテスト**
-3. **エラーハンドリングをテスト**
-4. **パフォーマンステストを実施**
-5. **定期的にテストを実行**
-
-### ❌ 避けるべき行為
-
-- ✗ テストなしでコミット
-- ✗ テストカバレッジを無視
-- ✗ エラーハンドリングをテストしない
-- ✗ 手動テストのみに依存
-
+| 対象 | 目標 | 優先度 |
+|------|------|--------|
+| `useUndoRedoHistory` | 90% | 🔴 高 |
+| `useAdvancedFileOperations` | 80% | 🔴 高 |
+| `usePDFFiles` | 80% | 🔴 高 |
+| `app/index.tsx` | 60% | 🟡 中 |
+| `app/trash.tsx` | 60% | 🟡 中 |
+| `app/settings.tsx` | 50% | 🟢 低 |

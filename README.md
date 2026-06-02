@@ -1,206 +1,111 @@
-# PDF Flick - PDF整理アプリ
+# PDF Flick
 
-## プロジェクト概要
-
-**PDF Flick**は、Androidのダウンロードフォルダに散乱したPDFファイルを、直感的な操作で効率よく整理するアプリケーションです。GoogleフォトのUIを参考にした、シンプルで使いやすいインターフェースを特徴としています。
-
-### 主な特徴
-
-- **フリック操作**: 左右のフリックで「削除」「保存」を実行。Tinderのような直感的な操作感を実現しています。
-- **プレビュー表示**: PDFの最初のページを表示し、内容を確認してから処理を判断できます。
-- **Undo機能**: 誤った操作は「元に戻す」ボタンで即座に取り消せます。
-- **シンプルなUI**: 目的一直線のデザインで、余計な機能を排除し、整理作業に集中できます。
-
----
-
-## 技術スタック
-
-| 項目 | 技術 |
-|------|------|
-| フロントエンド | React 19 + TypeScript |
-| スタイリング | Tailwind CSS 4 |
-| UIコンポーネント | shadcn/ui |
-| ルーティング | Wouter |
-| ビルドツール | Vite |
-| パッケージマネージャー | pnpm |
+Androidのダウンロードフォルダに溜まったPDFファイルを、直感的なフリック操作で素早く整理するアプリです。
 
 ---
 
 ## プロジェクト構成
 
 ```
-pdf_flick/
-├── client/
-│   ├── public/           # 静的ファイル（favicon.ico等）
-│   ├── src/
-│   │   ├── pages/        # ページコンポーネント
-│   │   │   ├── Home.tsx  # メイン画面（PDF整理画面）
-│   │   │   └── NotFound.tsx
-│   │   ├── components/   # 再利用可能なUIコンポーネント
-│   │   ├── contexts/     # React Context
-│   │   ├── hooks/        # カスタムフック
-│   │   ├── lib/          # ユーティリティ関数
-│   │   ├── App.tsx       # ルーティング定義
-│   │   ├── main.tsx      # React エントリーポイント
-│   │   └── index.css     # グローバルスタイル
-│   └── index.html        # HTMLテンプレート
-├── server/               # Express サーバー（互換性用プレースホルダー）
-├── shared/               # 共有型定義（互換性用プレースホルダー）
-├── package.json
-├── tsconfig.json
-├── vite.config.ts
-└── tailwind.config.ts
+PDF-Flick/
+├── android/          # Androidアプリ（メイン成果物）
+├── client/           # Webプロトタイプ（React + Vite）
+├── server/           # バックエンド（プレースホルダー）
+├── shared/           # 共有型定義
+└── docs/             # 検証レポート等
 ```
+
+> **現在の主成果物は `android/` です。** Webプロトタイプ（`client/`）はUI検討用の初期実装です。
 
 ---
 
-## セットアップ手順
+## Androidアプリ
 
-### 前提条件
+### 機能概要
 
-- Node.js 22.13.0 以上
-- pnpm 10.4.1 以上
+| 機能 | 内容 |
+|------|------|
+| ダウンロードフォルダスキャン | `file:///storage/emulated/0/Download/` 内の PDF を自動検出 |
+| フリック操作 | 右 → 保存フォルダへ移動　／　左 → ゴミ箱へ移動 |
+| Undo/Redo | 最大50操作の履歴管理、誤操作を即座に取り消し |
+| ゴミ箱 | 削除したファイルをアプリ内に退避、一覧・復元・完全削除 |
+| 保存先設定 | Storage Access Framework でフォルダをユーザーが選択 |
 
-### インストール
+### 技術スタック
 
-1. **リポジトリをクローン**
+| 項目 | 内容 |
+|------|------|
+| フレームワーク | React Native 0.81.5 + Expo SDK 54 |
+| 言語 | TypeScript 5.9.2 |
+| ナビゲーション | Expo Router (Stack) |
+| ファイルシステム | expo-file-system/legacy |
+| ビルド | EAS Build (preview profile → APK) |
+| パッケージID | `com.pdfflick.app` |
 
-```bash
-git clone <repository-url>
-cd pdf_flick
+### ビルド手順（Windows）
+
+```powershell
+git clone https://github.com/TEVASAKI/PDF-Flick.git
+cd PDF-Flick
+git checkout claude/continue-pdf-flick-d0KVf
+
+cd android
+npm install
+
+# EAS Build でAPK生成
+npm install -g eas-cli
+eas login
+eas build --platform android --profile preview
 ```
 
-2. **依存パッケージをインストール**
+APKをダウンロードしてAndroid端末にサイドロードしてください。
+
+詳細は [`android/README_ANDROID.md`](android/README_ANDROID.md) を参照してください。
+
+---
+
+## Webプロトタイプ
 
 ```bash
 pnpm install
-```
-
-3. **開発サーバーを起動**
-
-```bash
 pnpm dev
+# http://localhost:3000
 ```
 
-ブラウザで `http://localhost:3000` にアクセスしてください。
-
----
-
-## 使用方法
-
-### メイン画面の操作
-
-1. **PDFプレビュー表示**: ダウンロードフォルダ内のPDFが1つずつ表示されます。最初のページをプレビューして、内容を確認できます。
-
-2. **フリック操作**:
-   - **右にフリック**: ファイルを保存フォルダに移動します。
-   - **左にフリック**: ファイルを削除します。
-
-3. **ボタン操作**:
-   - **「保存」ボタン**: 右フリックと同じ動作。ファイルを保存フォルダに移動します。
-   - **「削除」ボタン**: 左フリックと同じ動作。ファイルを削除します。
-   - **「元に戻す」ボタン**: 直前の操作を取り消します。
-
-4. **処理完了**: すべてのファイルを処理すると、整理完了画面が表示されます。
+| 項目 | 内容 |
+|------|------|
+| フレームワーク | React 19 + Vite |
+| スタイリング | Tailwind CSS 4 + shadcn/ui |
+| ルーティング | Wouter |
 
 ---
 
 ## デザイン哲学
 
-**PDF Flick**は、「エレガント・プロフェッショナル型」デザインを採用しています。
+「エレガント・プロフェッショナル型」を採用。
 
-### デザイン原則
-
-- **余白の美学**: 日本的な「余白」の概念を取り入れ、ユーザーの認知負荷を最小化しています。
-- **落ち着いた配色**: 白背景に墨色テキスト、深い緑（保存）と薄い紅色（削除）のアクセントで、ビジネスユースに適した雰囲気を実現しています。
-- **非対称レイアウト**: 黄金比を意識した非対称配置により、左右のフリック方向が自然に認識されます。
-- **細部へのこだわり**: 細い線（1px）で区切られたセクション、上質なタイポグラフィにより、洗練された印象を与えます。
-
-### カラーパレット
-
-| 用途 | 色 | OKLCH値 |
-|------|-----|---------|
-| 背景 | 白 | `oklch(1 0 0)` |
-| テキスト | 墨色 | `oklch(0.235 0.015 65)` |
-| 保存アクション | 深い緑 | `oklch(0.15 0.05 140)` |
-| 削除アクション | 薄い紅色 | `oklch(0.4 0.1 10)` |
-| 補助線 | 薄いグレー | `oklch(0.92 0.004 286.32)` |
-
-### タイポグラフィ
-
-- **見出し**: Noto Serif JP（セリフ体）- 上質感と信頼感を表現
-- **本体テキスト**: Noto Sans JP（サンセリフ体）- 可読性と親しみやすさを実現
+| 要素 | 値 |
+|------|-----|
+| 背景 | 白 `#FFFFFF` |
+| テキスト | 墨色 `#2C2C2C` |
+| 保存アクション | 深い緑 `#1B4332` |
+| 削除アクション | 薄い紅色 `#D62828` |
+| 補助線 | 薄いグレー `#E0E0E0` |
 
 ---
 
-## 開発ガイド
+## ドキュメント
 
-### コンポーネント開発
-
-新しいコンポーネントを追加する際は、以下の点に注意してください。
-
-1. **shadcn/uiコンポーネントの活用**: 既存のコンポーネントライブラリを最大限活用し、一貫性を保ちます。
-2. **Tailwind CSSユーティリティ**: カスタムCSSを最小化し、Tailwind CSSのユーティリティクラスを優先します。
-3. **デザイン哲学の遵守**: 色、間隔、タイポグラフィは、定義されたデザイン原則に従います。
-
-### スタイリング
-
-グローバルスタイルは `client/src/index.css` で管理されています。カラーパレットやタイポグラフィの変更は、このファイルで一元管理してください。
-
----
-
-## ビルド・デプロイ
-
-### 本番ビルド
-
-```bash
-pnpm build
-```
-
-ビルド成果物は `dist/` ディレクトリに出力されます。
-
-### プレビュー
-
-```bash
-pnpm preview
-```
-
----
-
-## トラブルシューティング
-
-### 開発サーバーが起動しない
-
-```bash
-# キャッシュをクリアして再起動
-rm -rf node_modules/.vite
-pnpm dev
-```
-
-### スタイルが反映されない
-
-Tailwind CSSのキャッシュをクリアしてください。
-
-```bash
-rm -rf .next
-pnpm dev
-```
+| ファイル | 内容 |
+|---------|------|
+| [`android/README_ANDROID.md`](android/README_ANDROID.md) | Androidアプリ詳細 |
+| [`android/SPECIFICATION_ANDROID.md`](android/SPECIFICATION_ANDROID.md) | 機能仕様書 |
+| [`android/CHANGELOG_ANDROID.md`](android/CHANGELOG_ANDROID.md) | 更新履歴 |
+| [`android/TESTING_GUIDE.md`](android/TESTING_GUIDE.md) | テストガイド |
+| [`docs/verification-report.md`](docs/verification-report.md) | ビルド検証レポート |
 
 ---
 
 ## ライセンス
 
 MIT License
-
----
-
-## 作成者
-
-Manus AI
-
----
-
-## 更新履歴
-
-詳細は `CHANGELOG.md` をご覧ください。
-

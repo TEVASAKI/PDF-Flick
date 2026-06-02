@@ -1,250 +1,230 @@
 # PDF Flick - Android 版
 
-**バージョン**: 1.0.0  
-**開発フレームワーク**: React Native (Expo)  
-**対応OS**: Android 8.0 以上
+**バージョン**: 1.1.0  
+**フレームワーク**: React Native 0.81.5 + Expo SDK 54  
+**対応OS**: Android 8.0 (API 26) 以上  
+**パッケージID**: `com.pdfflick.app`
 
 ---
 
-## プロジェクト概要
+## 概要
 
-**PDF Flick** は、Androidのダウンロードフォルダに散乱したPDFファイルを、直感的なフリック操作で効率よく整理するアプリケーションです。
+Androidのダウンロードフォルダに溜まったPDFファイルを、フリック操作で素早く整理するアプリです。
 
-### 主な特徴
+### 主な機能
 
-- **フリック操作**: 左右のフリックで「削除」「保存」を実行。Tinderのような直感的な操作感
-- **プレビュー表示**: PDFの最初のページを表示し、内容を確認してから処理を判断
-- **Undo機能**: 誤った操作は「元に戻す」ボタンで即座に取り消し可能
-- **シンプルなUI**: 目的一直線のデザインで、整理作業に集中できる環境を実現
+- **フリック操作** — 右フリックで保存フォルダへ移動、左フリックでゴミ箱へ移動
+- **Undo/Redo** — 最大50件の操作履歴、誤操作を即座に取り消し
+- **ゴミ箱** — 削除ファイルをアプリ内に退避。一覧・復元・完全削除が可能
+- **保存先フォルダ設定** — Storage Access Framework でユーザーが任意のフォルダを選択
+
+---
+
+## ファイル構成
+
+```
+android/
+├── app/
+│   ├── _layout.tsx              # Stack ナビゲーション (index / settings / trash)
+│   ├── index.tsx                # メイン画面（PDF フリック整理）
+│   ├── settings.tsx             # 設定画面（保存先フォルダ設定）
+│   └── trash.tsx                # ゴミ箱管理画面
+├── hooks/
+│   ├── usePDFFiles.ts           # Downloads フォルダスキャン・ファイル一覧
+│   ├── useAdvancedFileOperations.ts  # ファイル移動・削除・ゴミ箱・復元
+│   ├── useUndoRedoHistory.ts    # Undo/Redo 履歴管理（最大50件）
+│   └── usePDFPreview.ts         # PDF プレビュー生成（キャッシュ付き）
+├── constants/
+│   └── theme.ts                 # カラー・スペーシング・シャドウ定義
+├── components/                  # 汎用UIコンポーネント
+├── assets/                      # アイコン・スプラッシュ画像
+├── android/                     # expo prebuild 生成のネイティブプロジェクト
+├── app.json                     # Expo設定（パッケージ名・権限等）
+├── eas.json                     # EAS Build プロファイル
+└── package.json
+```
 
 ---
 
 ## 技術スタック
 
-| 項目 | 技術 |
-|------|------|
-| フレームワーク | React Native 0.81.5 |
-| ビルドツール | Expo 54.0.33 |
-| 言語 | TypeScript 5.9.2 |
-| UI コンポーネント | Expo Vector Icons |
-| ファイルシステム | expo-file-system |
-| ドキュメントピッカー | expo-document-picker |
-| パッケージマネージャー | npm |
+| 項目 | バージョン / 詳細 |
+|------|-----------------|
+| React Native | 0.81.5 |
+| Expo | 54.0.33 |
+| TypeScript | 5.9.2 |
+| ナビゲーション | Expo Router 6 (Stack) |
+| ファイルシステム | expo-file-system **55.x (legacy API)** |
+| ジェスチャー | PanResponder（React Native 組み込み） |
+| アイコン | @expo/vector-icons (Ionicons) |
+| ビルド | EAS Build |
+
+> **注意**: `expo-file-system` v55 で旧 API が非推奨になりました。本アプリでは `expo-file-system/legacy` からインポートしています。
 
 ---
 
-## プロジェクト構成
-
-```
-pdf_flick_android/
-├── app/
-│   ├── index.tsx              # メイン画面（PDF整理画面）
-│   ├── settings.tsx           # 設定画面（保存先フォルダ設定）
-│   ├── _layout.tsx            # ルートレイアウト
-│   └── (tabs)/
-│       └── _layout.tsx        # タブレイアウト
-├── hooks/
-│   ├── usePDFFiles.ts         # ファイルシステムアクセス
-│   ├── usePDFPreview.ts       # PDFプレビュー生成
-│   └── useUndoHistory.ts      # Undo機能管理
-├── constants/
-│   └── theme.ts               # テーマ設定（色、スペーシング等）
-├── app.json                   # Expo設定ファイル
-├── package.json               # 依存パッケージ定義
-├── tsconfig.json              # TypeScript設定
-├── ANDROID_SETUP.md           # Android版セットアップガイド
-└── README_ANDROID.md          # 本ファイル
-```
-
----
-
-## セットアップ手順
+## セットアップ
 
 ### 前提条件
 
-- Node.js 22.13.0 以上
-- npm 10.9.2 以上
-- Android Studio（開発環境）
+- Node.js 22 以上
+- npm 10 以上
+- EAS CLI (`npm install -g eas-cli`)
+- Expo アカウント（無料）
 
 ### インストール
 
-1. **リポジトリをクローン**
-
 ```bash
-git clone <repository-url>
-cd pdf_flick_android
-```
-
-2. **依存パッケージをインストール**
-
-```bash
+git clone https://github.com/TEVASAKI/PDF-Flick.git
+cd PDF-Flick
+git checkout claude/continue-pdf-flick-d0KVf
+cd android
 npm install
 ```
 
-3. **開発サーバーを起動**
+### APK ビルド（EAS Build）
 
 ```bash
-npm run android
+eas login
+eas build --platform android --profile preview
 ```
 
-詳細は [ANDROID_SETUP.md](./ANDROID_SETUP.md) をご覧ください。
+ビルド完了（約10〜15分）後、表示されるURLからAPKをダウンロードします。
 
----
-
-## 使用方法
-
-### 初回起動時
-
-1. アプリを起動すると、設定画面が表示されます
-2. 「フォルダを選択」ボタンをタップして、PDFファイルの保存先フォルダを指定してください
-3. 「保存」ボタンをタップして設定を完了します
-
-### メイン画面での操作
-
-1. **PDFプレビュー表示**: ダウンロードフォルダ内のPDFが1つずつ表示されます
-2. **フリック操作**:
-   - **右にフリック**: ファイルを保存フォルダに移動します
-   - **左にフリック**: ファイルを削除します
-3. **ボタン操作**:
-   - **「保存」ボタン**: 右フリックと同じ動作
-   - **「削除」ボタン**: 左フリックと同じ動作
-   - **「元に戻す」ボタン**: 直前の操作を取り消します
-4. **処理完了**: すべてのファイルを処理すると、整理完了画面が表示されます
-
----
-
-## デザイン哲学
-
-**PDF Flick** は、「エレガント・プロフェッショナル型」デザインを採用しています。
-
-### デザイン原則
-
-- **余白の美学**: 日本的な「余白」の概念を取り入れ、ユーザーの認知負荷を最小化
-- **落ち着いた配色**: 白背景に墨色テキスト、深い緑（保存）と薄い紅色（削除）のアクセント
-- **非対称レイアウト**: 黄金比を意識した配置で、左右のフリック方向が自然に認識される
-- **細部へのこだわり**: 細い線で区切られたセクション、上質なタイポグラフィ
-
-### カラーパレット
-
-| 用途 | 色 | 値 |
-|------|-----|------|
-| 背景 | 白 | #FFFFFF |
-| テキスト | 墨色 | #2C2C2C |
-| 保存アクション | 深い緑 | #1B4332 |
-| 削除アクション | 薄い紅色 | #D62828 |
-| 補助線 | 薄いグレー | #E0E0E0 |
-
----
-
-## 主要機能の実装詳細
-
-### 1. ファイルシステムアクセス（`usePDFFiles.ts`）
-
-- ダウンロードフォルダのスキャン
-- PDF ファイルの検出と情報取得
-- ファイル移動・削除・ゴミ箱機能
-
-### 2. PDFプレビュー生成（`usePDFPreview.ts`）
-
-- プレビュー画像のキャッシング
-- プレースホルダー画像の生成
-- メモリ効率的な実装
-
-### 3. Undo機能（`useUndoHistory.ts`）
-
-- 操作履歴の管理
-- 直前の操作の取り消し
-- 統計情報の取得
-
-### 4. UI実装（`app/index.tsx`）
-
-- エレガント・プロフェッショナル型デザイン
-- PanResponder を使用したフリック操作
-- ボタン操作
-- 完了画面
-
----
-
-## ビルド・デプロイ
-
-### 開発ビルド
+### ローカルビルド（Android Studio が必要）
 
 ```bash
-npm run android
+npx expo prebuild --platform android --clean
+cd android
+./gradlew assembleDebug
+# APK: android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-### 本番ビルド
+---
 
-```bash
-eas build --platform android --local
+## 使い方
+
+### 初回起動
+
+1. ストレージ権限ダイアログが表示される → **許可**
+2. Android 11以上の場合、`MANAGE_EXTERNAL_STORAGE` を設定アプリから手動許可が必要な場合あり
+
+### メイン画面
+
+| 操作 | 動作 |
+|------|------|
+| 右にフリック | 設定した保存フォルダにファイルを移動 |
+| 左にフリック | ファイルをゴミ箱に移動（復元可能） |
+| 「元に戻す」ボタン | 直前の操作を取り消し（Undo） |
+| 「保存」ボタン | 右フリックと同等 |
+| 「削除」ボタン | 左フリックと同等 |
+| 歯車アイコン | 設定画面へ移動 |
+
+### 設定画面
+
+- **フォルダを選択**: Storage Access Framework でフォルダピッカーを表示
+- 設定は `DocumentDirectory/pdf_flick_config.json` に保存される
+
+### ゴミ箱画面
+
+- 削除したファイルの一覧表示
+- 個別に復元（Downloads フォルダに戻す）または完全削除
+- 「ゴミ箱を空にする」で一括削除
+
+---
+
+## Android 権限
+
+`AndroidManifest.xml` に設定済みの権限:
+
+| 権限 | 用途 |
+|------|------|
+| `READ_EXTERNAL_STORAGE` | Android ≤ 12 でのファイル読み取り |
+| `WRITE_EXTERNAL_STORAGE` | Android ≤ 12 でのファイル書き込み |
+| `MANAGE_EXTERNAL_STORAGE` | Downloads フォルダへの直接アクセス |
+| `READ_MEDIA_IMAGES` | Android 13+ メディアアクセス |
+| `READ_MEDIA_VIDEO` | 同上 |
+| `READ_MEDIA_AUDIO` | 同上 |
+
+---
+
+## 主要フックのAPI
+
+### `usePDFFiles()`
+
+Downloads フォルダ（`file:///storage/emulated/0/Download/`）をスキャンします。
+
+```typescript
+const { files, loading, error, refresh } = usePDFFiles();
 ```
 
-詳細は [ANDROID_SETUP.md](./ANDROID_SETUP.md) をご覧ください。
+| 戻り値 | 型 | 説明 |
+|--------|-----|------|
+| `files` | `PDFFile[]` | PDFファイル一覧（名前順ソート） |
+| `loading` | `boolean` | スキャン中フラグ |
+| `error` | `string \| null` | エラーメッセージ |
+| `refresh` | `() => void` | 再スキャン |
+
+### `useAdvancedFileOperations()`
+
+```typescript
+const { moveFile, moveToTrash, restoreFromTrash, deleteFile,
+        getTrashFiles, emptyTrash, operationState } = useAdvancedFileOperations();
+```
+
+| メソッド | 説明 |
+|---------|------|
+| `moveFile(src, destFolder)` | ファイルを指定フォルダに移動 |
+| `moveToTrash(filePath)` | ゴミ箱に移動（`DocumentDirectory/trash/`） |
+| `restoreFromTrash(trashPath, originalPath)` | ゴミ箱から復元 |
+| `deleteFile(filePath)` | 完全削除 |
+| `getTrashFiles()` | ゴミ箱内ファイル一覧取得 |
+| `emptyTrash()` | ゴミ箱を空にする |
+
+### `useUndoRedoHistory(maxSize = 50)`
+
+```typescript
+const { addToHistory, undo, canUndo, getStatistics } = useUndoRedoHistory();
+```
+
+| メソッド | 説明 |
+|---------|------|
+| `addToHistory(entry)` | 操作を履歴に追加 |
+| `undo()` | 直前の操作エントリを取得して削除 |
+| `canUndo()` | Undo 可能かどうか |
+| `getStatistics()` | `{ total, keep, delete }` 統計 |
+
+---
+
+## カラーパレット
+
+`constants/theme.ts` で定義:
+
+| 用途 | 定数 | 値 |
+|------|------|----|
+| 背景 | `Colors.background` | `#FFFFFF` |
+| テキスト | `Colors.foreground` | `#2C2C2C` |
+| 保存アクション | `Colors.success` | `#1B4332` |
+| 削除アクション | `Colors.error` | `#D62828` |
+| 補助線 | `Colors.border` | `#E0E0E0` |
+| ミュートテキスト | `Colors.mutedForeground` | `#808080` |
 
 ---
 
 ## トラブルシューティング
 
-### よくある問題
-
-| 問題 | 原因 | 対応 |
+| 問題 | 原因 | 対処 |
 |------|------|------|
-| ビルドが失敗する | Android SDK が正しくインストールされていない | [ANDROID_SETUP.md](./ANDROID_SETUP.md) を参照 |
-| Expo Go でアプリが起動しない | ネットワーク接続の問題 | `npm run android -- --tunnel` を試す |
-| ファイルアクセス権限エラー | 権限が許可されていない | アプリの設定で権限を許可 |
-| メモリ不足エラー | プレビュー画像がメモリに蓄積 | キャッシュサイズを制限 |
-
-詳細は [ANDROID_SETUP.md](./ANDROID_SETUP.md) のトラブルシューティングセクションを参照してください。
-
----
-
-## パフォーマンス要件
-
-### 応答時間
-
-| 操作 | 目標時間 |
-|------|---------|
-| ファイル一覧表示 | 1秒以内 |
-| プレビュー表示 | 500ms以内 |
-| フリック操作（ファイル移動） | 2秒以内 |
-| Undo実行 | 500ms以内 |
-
-### メモリ使用量
-
-- 初期メモリ: 50MB以下
-- ファイル10個処理時: 100MB以下
-- プレビュー画像キャッシュ: 最大50MB
-
----
-
-## 今後の拡張機能
-
-以下の機能は、将来のバージョンで実装を検討する可能性があります。
-
-- 複数の保存先フォルダを設定可能にする
-- ファイルにタグを付けて分類
-- 自動整理ルール（例: 日付別フォルダに自動分類）
-- クラウドストレージへの直接保存
-- バッチ処理（複数ファイルの一括操作）
-- ダークモード対応
-
----
-
-## ライセンス
-
-MIT License
-
----
-
-## 作成者
-
-Manus AI
+| Downloads フォルダが空 | 権限が許可されていない | 設定アプリ → アプリ → PDF Flick → 権限 → ストレージを許可 |
+| Android 11+ でアクセス拒否 | `MANAGE_EXTERNAL_STORAGE` が必要 | 設定 → プライバシー → 特別なアプリアクセス → すべてのファイルへのアクセス |
+| EAS Build が失敗 | Expo アカウント未ログイン | `eas login` を再実行 |
+| ビルドエラー（型エラー） | expo-file-system のインポート誤り | `expo-file-system/legacy` を使用していることを確認 |
 
 ---
 
 ## 関連ドキュメント
 
-- [Webプロトタイプ README](../pdf_flick/README.md)
-- [Webプロトタイプ 仕様説明書](../pdf_flick/SPECIFICATION.md)
-- [Webプロトタイプ 導入手順書](../pdf_flick/INSTALLATION_GUIDE.md)
-
+- [`SPECIFICATION_ANDROID.md`](./SPECIFICATION_ANDROID.md) — 機能仕様書
+- [`CHANGELOG_ANDROID.md`](./CHANGELOG_ANDROID.md) — 更新履歴
+- [`TESTING_GUIDE.md`](./TESTING_GUIDE.md) — テストガイド
+- [`../docs/verification-report.md`](../docs/verification-report.md) — ビルド検証レポート
