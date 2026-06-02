@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 
 export interface PDFFile {
   id: string;
@@ -45,7 +45,7 @@ export const usePDFFiles = () => {
         pdfFiles.map(async (filename) => {
           const filePath = DOWNLOADS_DIR + filename;
           try {
-            const fileInfo = await FileSystem.getInfoAsync(filePath, { size: true });
+            const fileInfo = await FileSystem.getInfoAsync(filePath);
             return {
               id: filename,
               name: filename,
