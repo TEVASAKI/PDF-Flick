@@ -1,14 +1,111 @@
 # PDF Flick - 実装更新履歴
 
-**最終更新**: 2026年3月2日  
-**バージョン**: 1.1.0  
+**最終更新**: 2026年6月5日  
+**バージョン**: 1.2.0  
 **対象**: React Native Android版
 
 ---
 
 ## 概要
 
-このドキュメントは、Undo/Redo機能とファイル操作の実装強化に関する詳細な更新履歴を記録しています。
+このドキュメントは、各バージョンの実装内容と変更履歴を記録しています。
+
+---
+
+## v1.2.0 - PDFリアルタイムプレビュー (2026-06-05)
+
+### 🎉 新機能
+
+#### **PDFカードにリアルタイムプレビュー表示**
+
+メインカードのグレープレースホルダー領域（アイコン表示のみだった部分）を、PDF 1ページ目の実レンダリングに置き換えた。
+
+**変更ファイル**: `app/index.tsx` のみ
+
+```tsx
+// Before: アイコンプレースホルダー
+<View style={styles.cardPreview}>
+  <Ionicons name="document-text" size={80} color={Colors.border} />
+  <Text style={styles.previewLabel}>PDF</Text>
+</View>
+
+// After: react-native-pdf によるリアルレンダリング
+<View style={styles.cardPreview}>
+  <Pdf
+    source={{ uri: currentFile.path }}
+    page={1}
+    minScale={1.0}
+    maxScale={1.0}
+    scrollEnabled={false}
+    enablePaging={false}
+    fitPolicy={0}
+    style={styles.pdfPreview}
+    onLoadComplete={() => setPdfLoading(false)}
+    onError={() => { setPdfLoading(false); setPdfError(true); }}
+  />
+  {pdfLoading && !pdfError && (
+    <View style={styles.pdfLoadingOverlay}>
+      <ActivityIndicator size="large" color={Colors.primary} />
+    </View>
+  )}
+  {pdfError && (
+    <>
+      <Ionicons name="document-text" size={80} color={Colors.border} />
+      <Text style={styles.previewLabel}>PDF</Text>
+    </>
+  )}
+</View>
+```
+
+**実装ポイント**:
+- `react-native-pdf`（既存依存、`^7.0.3`）を初めて実際に使用
+- `minScale/maxScale=1.0` と `scrollEnabled={false}` でズーム・スクロールを封印し、親の `PanResponder` スワイプと競合しない
+- `pdfLoading`・`pdfError` state を追加し、カード切り替え（`currentIndex` 変化）のたびにリセット
+- エラー時はフォールバックアイコンを表示してクラッシュを防止
+
+#### **設定の永続化（saveFolderPath）**
+
+```tsx
+// useFocusEffect で画面フォーカス時にも設定を再ロード
+useFocusEffect(
+  useCallback(() => {
+    const loadConfig = async () => {
+      const fileInfo = await FileSystem.getInfoAsync(CONFIG_PATH);
+      if (fileInfo.exists) {
+        const raw = await FileSystem.readAsStringAsync(CONFIG_PATH);
+        const config = JSON.parse(raw);
+        setSaveFolderPath(config.saveFolderPath ?? null);
+      }
+    };
+    loadConfig();
+  }, [])
+);
+```
+
+### 🔧 ビルド修正
+
+| 問題 | 修正内容 |
+|------|---------|
+| `expo-file-system` v55 との非互換 | `~19.0.23` にダウングレード |
+| deprecation 警告 | 全ファイルで `expo-file-system/legacy` に統一 |
+| ネイティブモジュール不一致（EAS） | `preview` プロファイルに `prebuild` を強制 |
+| ProGuard による `NoClassDefFoundError` | Expo Modules の keep rules を追加 |
+
+### 📊 既知の問題
+
+| # | 問題 | 発生箇所 | 根本原因 |
+|---|------|---------|---------|
+| 1 | Downloads フォルダのファイルを削除できない | `handleDelete` → `moveToTrash` → `FileSystem.deleteAsync` | `expo-file-system` が外部ストレージの削除を内部でブロック。`MANAGE_EXTERNAL_STORAGE` の実行時許可が未実装 |
+| 2 | 保存先（SAF URI）へのファイル移動が失敗 | `handleKeep` → `moveFile` → `FileSystem.getInfoAsync(content://...)` | `FileSystem` 通常 API が `content://` URI 非対応。SAF API への切り替えが必要 |
+
+### 📋 開発統計（v1.2.0）
+
+| 項目 | 数値 |
+|------|------|
+| 変更ファイル数 | 1 (`app/index.tsx`) |
+| 追加行数 | +47 |
+| TypeScript エラー | 0 |
+| Lint エラー | 0 |
 
 ---
 

@@ -2,6 +2,52 @@
 
 ---
 
+## [1.2.0] - 2026-06-05
+
+### 追加（Added）
+
+#### PDFリアルタイムプレビュー
+
+- カード上部（プレースホルダーアイコン領域）に PDF 1ページ目を実際にレンダリング表示
+- `react-native-pdf`（v7.0.3、既存インストール済み）を使用した Native PdfRenderer ベースの描画
+- スクロール・ズームを無効化（`scrollEnabled={false}`、`minScale/maxScale=1.0`）し、スワイプ操作と競合しない設計
+- `fitPolicy={0}` で横幅フィット表示
+- カード切り替え時にローディングスピナーを表示（`ActivityIndicator`）
+- PDF 読み込み失敗時はフォールバックアイコン（🗎 PDF）を表示
+- `currentIndex` 変化時にローディング・エラー状態をリセットする `useEffect` を追加
+
+#### 設定の永続化
+
+- アプリ起動・画面フォーカス時に `pdf_flick_config.json` から `saveFolderPath` を自動ロード（`useFocusEffect` 利用）
+
+### 修正（Fixed）
+
+#### ビルド・依存関係
+
+- `expo-file-system` を v55 から `~19.0.23`（Expo SDK 54 互換）にダウングレード
+- 全ファイルで `expo-file-system/legacy` インポートに統一（deprecation 警告を抑制）
+- `expo-file-system`・`expo-document-picker` のバージョンを `~` で固定しドリフト防止
+- EAS Build `preview` プロファイルに `prebuild` ステップを強制追加（ネイティブモジュール不一致エラーを解消）
+- EAS Build `preview` プロファイルに `autoIncrement: true` を追加
+- ProGuard keep rules に Expo Modules を追加し `NoClassDefFoundError` を解消
+
+### 既知の問題（Known Issues）
+
+| 問題 | 原因 | 対処予定 |
+|------|------|---------|
+| Downloads フォルダのファイルを削除できない | `expo-file-system` が外部ストレージの `deleteAsync` をブロック。`MANAGE_EXTERNAL_STORAGE` の実行時リクエストが未実装 | v1.3.0 で native module を追加して対応 |
+| 保存先フォルダへのファイル移動が失敗する | `moveFile` が `content://` SAF URI を `FileSystem.getInfoAsync` に渡しており非対応 | v1.3.0 で SAF API を使用するよう修正 |
+
+### テスト結果（v1.2.0）
+
+| 項目 | 結果 |
+|------|------|
+| TypeScript | ✅ エラー 0 |
+| Expo Lint | ✅ エラー 0 / 警告 5（既存の未使用変数） |
+| 対象ファイル変更 | `app/index.tsx` のみ |
+
+---
+
 ## [1.1.0] - 2026-06-02
 
 ### 修正（Fixed）
