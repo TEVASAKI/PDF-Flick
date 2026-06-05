@@ -18,6 +18,7 @@ import { useUndoRedoHistory } from '@/hooks/useUndoRedoHistory';
 import { useAdvancedFileOperations } from '@/hooks/useAdvancedFileOperations';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
+import Pdf from 'react-native-pdf';
 
 const CONFIG_PATH = (FileSystem.documentDirectory ?? '') + 'pdf_flick_config.json';
 
@@ -41,6 +42,8 @@ export default function PDFFlickEnhancedScreen() {
   const [saveFolderPath, setSaveFolderPath] = useState<string | null>(null);
   const [showCompletionScreen, setShowCompletionScreen] = useState(false);
   const [processedFiles, setProcessedFiles] = useState<Set<string>>(new Set());
+  const [pdfLoading, setPdfLoading] = useState(true);
+  const [pdfError, setPdfError] = useState(false);
 
   // アニメーション用
   const pan = useRef(new Animated.ValueXY()).current;
@@ -65,6 +68,12 @@ export default function PDFFlickEnhancedScreen() {
       loadConfig();
     }, [])
   );
+
+  // カードが変わるたびにPDFプレビューの状態をリセット
+  useEffect(() => {
+    setPdfLoading(true);
+    setPdfError(false);
+  }, [currentIndex]);
 
   // ファイルアクセス権限をリクエスト
   useEffect(() => {
@@ -360,8 +369,29 @@ export default function PDFFlickEnhancedScreen() {
 
         <View style={styles.card}>
           <View style={styles.cardPreview}>
-            <Ionicons name="document-text" size={80} color={Colors.border} />
-            <Text style={styles.previewLabel}>PDF</Text>
+            <Pdf
+              source={{ uri: currentFile.path }}
+              page={1}
+              minScale={1.0}
+              maxScale={1.0}
+              scrollEnabled={false}
+              enablePaging={false}
+              fitPolicy={0}
+              style={styles.pdfPreview}
+              onLoadComplete={() => setPdfLoading(false)}
+              onError={() => { setPdfLoading(false); setPdfError(true); }}
+            />
+            {pdfLoading && !pdfError && (
+              <View style={styles.pdfLoadingOverlay}>
+                <ActivityIndicator size="large" color={Colors.primary} />
+              </View>
+            )}
+            {pdfError && (
+              <>
+                <Ionicons name="document-text" size={80} color={Colors.border} />
+                <Text style={styles.previewLabel}>PDF</Text>
+              </>
+            )}
           </View>
 
           <View style={styles.cardInfo}>
@@ -523,6 +553,21 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.muted,
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'hidden',
+  },
+  pdfPreview: {
+    flex: 1,
+    width: '100%',
+  },
+  pdfLoadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: Colors.muted,
   },
   previewLabel: {
     fontSize: 16,
