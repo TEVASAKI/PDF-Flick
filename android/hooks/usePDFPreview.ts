@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import * as FileSystem from 'expo-file-system/legacy';
+import * as FileSystem from 'expo-file-system';
 
 /**
  * PDF の最初のページをプレビュー画像に変換するカスタムフック

@@ -59,7 +59,7 @@ android/
 | アイコン | @expo/vector-icons (Ionicons) |
 | ビルド | EAS Build |
 
-> **注意**: `expo-file-system` v55 で旧 API が非推奨になりました。本アプリでは `expo-file-system/legacy` からインポートしています。
+> **注意**: `expo-file-system` v55 で旧 API が非推奨になりました。本アプリでは `expo-file-system` からインポートしています。
 
 ---
 
@@ -218,7 +218,7 @@ const { addToHistory, undo, canUndo, getStatistics } = useUndoRedoHistory();
 | Downloads フォルダが空 | 権限が許可されていない | 設定アプリ → アプリ → PDF Flick → 権限 → ストレージを許可 |
 | Android 11+ でアクセス拒否 | `MANAGE_EXTERNAL_STORAGE` が必要 | 設定 → プライバシー → 特別なアプリアクセス → すべてのファイルへのアクセス |
 | EAS Build が失敗 | Expo アカウント未ログイン | `eas login` を再実行 |
-| ビルドエラー（型エラー） | expo-file-system のインポート誤り | `expo-file-system/legacy` を使用していることを確認 |
+| ビルドエラー（型エラー） | expo-file-system のインポート誤り | `expo-file-system` を使用していることを確認 |
 
 ---
 

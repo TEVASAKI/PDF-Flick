@@ -114,9 +114,9 @@ describe('useUndoRedoHistory', () => {
 // hooks/__tests__/useAdvancedFileOperations.test.ts
 import { renderHook, act, waitFor } from '@testing-library/react-native';
 import { useAdvancedFileOperations } from '../useAdvancedFileOperations';
-import * as FileSystem from 'expo-file-system/legacy';
+import * as FileSystem from 'expo-file-system';
 
-jest.mock('expo-file-system/legacy');
+jest.mock('expo-file-system');
 
 describe('useAdvancedFileOperations', () => {
   beforeEach(() => jest.clearAllMocks());
@@ -183,9 +183,9 @@ describe('useAdvancedFileOperations', () => {
 // hooks/__tests__/usePDFFiles.test.ts
 import { renderHook, waitFor } from '@testing-library/react-native';
 import { usePDFFiles } from '../usePDFFiles';
-import * as FileSystem from 'expo-file-system/legacy';
+import * as FileSystem from 'expo-file-system';
 
-jest.mock('expo-file-system/legacy');
+jest.mock('expo-file-system');
 
 const DOWNLOADS_DIR = 'file:///storage/emulated/0/Download/';
 
@@ -316,7 +316,7 @@ console.log(`moveFile: ${(performance.now() - t0).toFixed(0)}ms`);
 ```bash
 cd android
 
-# expo-file-system/legacy を使っているか確認
+# expo-file-system を使っているか確認
 grep -rn "from 'expo-file-system'" app/ hooks/ components/
 # → 出力なしが正常（すべて /legacy を使用）
 
@@ -335,10 +335,10 @@ grep -rn "Colors\.\(card\|tint\|icon\|text\b\)" app/ hooks/ components/
 
 | 問題 | 原因 | 対処 |
 |------|------|------|
-| `TypeError: copyAsync is not a function` | FileSystem のモックが不足 | `jest.mock('expo-file-system/legacy')` を追加 |
+| `TypeError: copyAsync is not a function` | FileSystem のモックが不足 | `jest.mock('expo-file-system')` を追加 |
 | Undo ボタンが常に無効 | `addToHistory` が呼ばれていない | 操作後に必ず `addToHistory` を呼んでいるか確認 |
 | Downloads フォルダが空 | テスト環境でパスが存在しない | `getInfoAsync` をモックして `exists: true` を返す |
-| TypeScript エラー | `expo-file-system` の import | `expo-file-system/legacy` に変更する |
+| TypeScript エラー | `expo-file-system` の import | `expo-file-system` に変更する |
 
 ---
 

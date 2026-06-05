@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import * as FileSystem from 'expo-file-system/legacy';
+import * as FileSystem from 'expo-file-system';
 
 export interface PDFFile {
   id: string;

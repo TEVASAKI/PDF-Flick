@@ -7,7 +7,7 @@
 ### 修正（Fixed）
 
 #### ビルド・型エラー
-- `expo-file-system` v55 の API 変更に対応。全ファイルで `expo-file-system/legacy` からインポートするよう変更
+- `expo-file-system` v55 の API 変更に対応。全ファイルで `expo-file-system` からインポートするよう変更
   - `hooks/usePDFFiles.ts`
   - `hooks/useAdvancedFileOperations.ts`
   - `hooks/usePDFPreview.ts`
