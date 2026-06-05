@@ -11,12 +11,15 @@ import {
   PermissionsAndroid,
   Platform,
 } from 'react-native';
+import * as FileSystem from 'expo-file-system/legacy';
 import { Colors, Spacing, Shadows, BorderRadius } from '@/constants/theme';
 import { usePDFFiles } from '@/hooks/usePDFFiles';
 import { useUndoRedoHistory } from '@/hooks/useUndoRedoHistory';
 import { useAdvancedFileOperations } from '@/hooks/useAdvancedFileOperations';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
+
+const CONFIG_PATH = (FileSystem.documentDirectory ?? '') + 'pdf_flick_config.json';
 
 /**
  * PDF Flick - 強化版メイン画面
@@ -35,7 +38,7 @@ export default function PDFFlickEnhancedScreen() {
   const { moveFile, moveToTrash, restoreFromTrash, operationState } = useAdvancedFileOperations();
 
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [saveFolderPath] = useState<string | null>(null);
+  const [saveFolderPath, setSaveFolderPath] = useState<string | null>(null);
   const [showCompletionScreen, setShowCompletionScreen] = useState(false);
   const [processedFiles, setProcessedFiles] = useState<Set<string>>(new Set());
 
@@ -43,6 +46,25 @@ export default function PDFFlickEnhancedScreen() {
   const pan = useRef(new Animated.ValueXY()).current;
   const swipeHintOpacity = useRef(new Animated.Value(0)).current;
   const swipeHintDirection = useRef<'keep' | 'delete' | null>(null);
+
+  // 設定画面から戻ったときも含めて保存先フォルダを読み込む
+  useFocusEffect(
+    React.useCallback(() => {
+      const loadConfig = async () => {
+        try {
+          const fileInfo = await FileSystem.getInfoAsync(CONFIG_PATH);
+          if (fileInfo.exists) {
+            const content = await FileSystem.readAsStringAsync(CONFIG_PATH);
+            const config = JSON.parse(content);
+            setSaveFolderPath(config.saveFolderPath ?? null);
+          }
+        } catch (e) {
+          console.warn('設定読み込みエラー:', e);
+        }
+      };
+      loadConfig();
+    }, [])
+  );
 
   // ファイルアクセス権限をリクエスト
   useEffect(() => {
