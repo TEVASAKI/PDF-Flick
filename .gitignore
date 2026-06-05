@@ -47,3 +47,4 @@ android/build/
 # Testing
 coverage/
 .nyc_output/
+test-pdfs/
