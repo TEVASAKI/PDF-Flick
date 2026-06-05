@@ -11,4 +11,17 @@
 -keep class com.swmansion.reanimated.** { *; }
 -keep class com.facebook.react.turbomodule.** { *; }
 
+# Expo Modules Core
+-keep class expo.modules.** { *; }
+-keepclassmembers class expo.modules.** { *; }
+
+# Expo File System
+-keep class expo.modules.filesystem.** { *; }
+
+# Kotlin metadata
+-keepattributes *Annotation*
+-keepattributes Signature
+-keep class kotlin.** { *; }
+-keep class kotlinx.** { *; }
+
 # Add any project specific keep options here:
