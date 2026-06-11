@@ -11,7 +11,7 @@ export interface PDFFile {
 }
 
 // Androidの実際のDownloadsフォルダパス
-const DOWNLOADS_DIR = 'file:///storage/emulated/0/Download/';
+export const DOWNLOADS_DIR = 'file:///storage/emulated/0/Download/';
 
 export const usePDFFiles = () => {
   const [files, setFiles] = useState<PDFFile[]>([]);

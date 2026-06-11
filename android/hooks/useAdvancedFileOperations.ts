@@ -11,6 +11,78 @@ export interface FileOperationResult {
 }
 
 /**
+ * SAF（Storage Access Framework）の content:// URI かどうかを判定
+ */
+export const isContentUri = (uri: string): boolean => uri.startsWith('content://');
+
+/**
+ * URI からファイル名を取得（SAF URI の %2F エンコードにも対応）
+ */
+export const getFileNameFromUri = (uri: string): string | null => {
+  const lastSegment = uri.split('/').pop();
+  if (!lastSegment) return null;
+  const decoded = decodeURIComponent(lastSegment);
+  return decoded.split('/').pop() || null;
+};
+
+/**
+ * ファイル移動のコアロジック（テスト可能な純粋関数）
+ *
+ * - file:// フォルダへの移動: copyAsync + deleteAsync
+ * - content://（SAF）フォルダへの移動: createFileAsync + Base64 読み書き
+ *   （getInfoAsync / copyAsync(to) は SAF URI 非対応のため）
+ *
+ * @returns 移動先の実ファイルURI とファイル名
+ * @throws 移動に失敗した場合
+ */
+export const performMoveFile = async (
+  sourcePath: string,
+  destinationFolder: string
+): Promise<{ path: string; fileName: string }> => {
+  const fileName = getFileNameFromUri(sourcePath);
+  if (!fileName) throw new Error('ファイル名を取得できません');
+
+  let destinationPath: string;
+
+  if (isContentUri(destinationFolder)) {
+    destinationPath = await FileSystem.StorageAccessFramework.createFileAsync(
+      destinationFolder,
+      fileName,
+      'application/pdf'
+    );
+    const base64 = await FileSystem.readAsStringAsync(sourcePath, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+    await FileSystem.writeAsStringAsync(destinationPath, base64, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+  } else {
+    const destDirInfo = await FileSystem.getInfoAsync(destinationFolder);
+    if (!destDirInfo.exists) {
+      await FileSystem.makeDirectoryAsync(destinationFolder, { intermediates: true });
+    }
+
+    destinationPath = destinationFolder + fileName;
+
+    // 同名ファイルが存在する場合は上書きせずエラー
+    const existingFile = await FileSystem.getInfoAsync(destinationPath);
+    if (existingFile.exists) {
+      throw new Error(`ファイル "${fileName}" は既に存在します`);
+    }
+
+    await FileSystem.copyAsync({
+      from: sourcePath,
+      to: destinationPath,
+    });
+  }
+
+  // 元のファイルを削除
+  await FileSystem.deleteAsync(sourcePath);
+
+  return { path: destinationPath, fileName };
+};
+
+/**
  * ファイル操作の状態インターフェース
  */
 export interface FileOperationState {
@@ -64,31 +136,10 @@ export const useAdvancedFileOperations = () => {
           error: null,
         }));
 
-        const fileName = sourcePath.split('/').pop();
-        if (!fileName) throw new Error('ファイル名を取得できません');
-
-        // 移動先ディレクトリが存在するか確認
-        const destDirInfo = await FileSystem.getInfoAsync(destinationFolder);
-        if (!destDirInfo.exists) {
-          await FileSystem.makeDirectoryAsync(destinationFolder, { intermediates: true });
-        }
-
-        const destinationPath = destinationFolder + fileName;
-
-        // 同名ファイルが存在する場合は上書き確認
-        const existingFile = await FileSystem.getInfoAsync(destinationPath);
-        if (existingFile.exists) {
-          throw new Error(`ファイル "${fileName}" は既に存在します`);
-        }
-
-        // ファイルをコピー
-        await FileSystem.copyAsync({
-          from: sourcePath,
-          to: destinationPath,
-        });
-
-        // 元のファイルを削除
-        await FileSystem.deleteAsync(sourcePath);
+        const { path: destinationPath, fileName } = await performMoveFile(
+          sourcePath,
+          destinationFolder
+        );
 
         setOperationState((prev) => ({
           ...prev,

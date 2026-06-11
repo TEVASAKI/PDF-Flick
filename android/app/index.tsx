@@ -12,8 +12,9 @@ import {
   Platform,
 } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
+import * as IntentLauncher from 'expo-intent-launcher';
 import { Colors, Spacing, Shadows, BorderRadius } from '@/constants/theme';
-import { usePDFFiles } from '@/hooks/usePDFFiles';
+import { usePDFFiles, DOWNLOADS_DIR } from '@/hooks/usePDFFiles';
 import { useUndoRedoHistory } from '@/hooks/useUndoRedoHistory';
 import { useAdvancedFileOperations } from '@/hooks/useAdvancedFileOperations';
 import { Ionicons } from '@expo/vector-icons';
@@ -78,14 +79,47 @@ export default function PDFFlickEnhancedScreen() {
   // ファイルアクセス権限をリクエスト
   useEffect(() => {
     const requestPermissions = async () => {
-      if (Platform.OS === 'android') {
+      if (Platform.OS !== 'android') return;
+
+      try {
+        await PermissionsAndroid.requestMultiple([
+          PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
+          PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
+        ]);
+      } catch (err) {
+        console.warn('権限リクエストエラー:', err);
+      }
+
+      // Android 11+ では Downloads 内のファイル削除に「すべてのファイルへのアクセス」
+      // （MANAGE_EXTERNAL_STORAGE）が必要。プローブ書き込みで権限有無を確認し、
+      // 未許可ならシステム設定へ誘導する
+      if (Platform.Version >= 30) {
+        const probePath = DOWNLOADS_DIR + '.pdf_flick_probe';
         try {
-          await PermissionsAndroid.requestMultiple([
-            PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
-            PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
-          ]);
-        } catch (err) {
-          console.warn('権限リクエストエラー:', err);
+          await FileSystem.writeAsStringAsync(probePath, 'probe');
+          await FileSystem.deleteAsync(probePath);
+        } catch {
+          Alert.alert(
+            'ファイルアクセス権限が必要です',
+            'PDFの整理（移動・削除）には「すべてのファイルへのアクセス」の許可が必要です。設定画面で PDF Flick を許可してください。',
+            [
+              { text: 'あとで', style: 'cancel' },
+              {
+                text: '設定を開く',
+                onPress: () => {
+                  IntentLauncher.startActivityAsync(
+                    'android.settings.MANAGE_APP_ALL_FILES_ACCESS_PERMISSION',
+                    { data: 'package:com.pdfflick.app' }
+                  ).catch(() => {
+                    // 端末によっては個別画面が無いため一覧画面にフォールバック
+                    IntentLauncher.startActivityAsync(
+                      'android.settings.MANAGE_ALL_FILES_ACCESS_PERMISSION'
+                    );
+                  });
+                },
+              },
+            ]
+          );
         }
       }
     };
@@ -132,22 +166,23 @@ export default function PDFFlickEnhancedScreen() {
 
     const currentFile = files[currentIndex];
 
+    const result = await moveFile(currentFile.path, saveFolderPath);
+    if (!result.success) {
+      Alert.alert('エラー', `ファイル移動に失敗しました: ${result.error}`);
+      return;
+    }
+
+    // 移動成功後に履歴へ追加（Undo用に実際の移動先URIを保存）
     addToHistory({
       action: 'keep',
       fileId: currentFile.id,
       fileName: currentFile.name,
       filePath: currentFile.path,
       metadata: {
-        destinationPath: saveFolderPath,
+        destinationPath: result.data?.path ?? saveFolderPath,
         previousState: { processed: false },
       },
     });
-
-    const result = await moveFile(currentFile.path, saveFolderPath);
-    if (!result.success) {
-      Alert.alert('エラー', `ファイル移動に失敗しました: ${result.error}`);
-      return;
-    }
 
     setProcessedFiles((prev) => new Set([...prev, currentFile.id]));
     moveToNext();
@@ -158,21 +193,23 @@ export default function PDFFlickEnhancedScreen() {
 
     const currentFile = files[currentIndex];
 
+    const result = await moveToTrash(currentFile.path);
+    if (!result.success) {
+      Alert.alert('エラー', `ファイル削除に失敗しました: ${result.error}`);
+      return;
+    }
+
+    // ゴミ箱移動成功後に履歴へ追加（Undo用にtrashPathを保存）
     addToHistory({
       action: 'delete',
       fileId: currentFile.id,
       fileName: currentFile.name,
       filePath: currentFile.path,
       metadata: {
+        trashPath: result.data?.trashPath,
         previousState: { processed: false },
       },
     });
-
-    const result = await moveToTrash(currentFile.path);
-    if (!result.success) {
-      Alert.alert('エラー', `ファイル削除に失敗しました: ${result.error}`);
-      return;
-    }
 
     setProcessedFiles((prev) => new Set([...prev, currentFile.id]));
     moveToNext();
@@ -188,7 +225,8 @@ export default function PDFFlickEnhancedScreen() {
     if (!lastEntry) return;
 
     if (lastEntry.action === 'keep' && lastEntry.metadata?.destinationPath) {
-      const destFile = lastEntry.metadata.destinationPath + lastEntry.fileName;
+      // destinationPath には移動先の実ファイルURI（SAF URI含む）が入っている
+      const destFile = lastEntry.metadata.destinationPath;
       const origDir = lastEntry.filePath.substring(0, lastEntry.filePath.lastIndexOf('/') + 1);
       const result = await moveFile(destFile, origDir);
       if (!result.success) {
