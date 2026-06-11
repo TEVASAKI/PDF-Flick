@@ -2,6 +2,50 @@
 
 ---
 
+## [1.2.1] - 2026-06-11
+
+### 修正（Fixed）
+
+#### 保存（ファイル移動）の失敗を修正
+
+- `moveFile` が SAF の `content://` URI を `FileSystem.getInfoAsync` に渡して
+  `IllegalArgumentException: Invalid URI` になっていた問題を修正
+- `content://` フォルダ宛のときは `StorageAccessFramework.createFileAsync` + Base64 読み書きで転送するよう変更
+- コアロジックを `performMoveFile`（純粋関数）として抽出
+
+#### 削除の失敗（`isn't deletable`）を修正
+
+- Android 11+ では Manifest の `MANAGE_EXTERNAL_STORAGE` 宣言だけでは不十分で、
+  ユーザーがシステム設定で「すべてのファイルへのアクセス」を許可する必要がある
+- 起動時に Downloads へのプローブ書き込みで権限を確認し、未許可なら
+  ダイアログから設定画面（`MANAGE_APP_ALL_FILES_ACCESS_PERMISSION`）へ誘導
+- `expo-intent-launcher@~13.0.8` を追加（**ネイティブ再ビルド必須**）
+
+#### Undo が機能しないバグを修正
+
+- `handleKeep` / `handleDelete` が操作の**前**に履歴追加しており、
+  `trashPath`・実際の移動先 URI が履歴に保存されていなかった
+- 操作成功後に履歴追加し、`metadata.destinationPath` には移動先の実ファイル URI、
+  `metadata.trashPath` にはゴミ箱パスを保存するよう修正
+
+### 追加（Added）
+
+- `jest-expo` によるユニットテスト環境（`npm test` で実行）
+- `hooks/__tests__/useAdvancedFileOperations.test.ts` — SAF移動・file://移動・
+  Undo経路・ファイル名抽出の10テスト
+- `getFileNameFromUri` / `isContentUri` ヘルパー（SAF URI の `%2F` エンコード対応）
+
+### テスト結果（v1.2.1）
+
+| 項目 | 結果 |
+|------|------|
+| ユニットテスト（jest） | ✅ 10/10 パス |
+| TypeScript | ✅ エラー 0 |
+| Expo Lint | ✅ エラー 0 / 警告 5（既存の未使用変数） |
+| 実機検証（Motorola edge40） | ⏳ ユーザー検証待ち |
+
+---
+
 ## [1.2.0] - 2026-06-05
 
 ### 追加（Added）
@@ -35,8 +79,8 @@
 
 | 問題 | 原因 | 対処予定 |
 |------|------|---------|
-| Downloads フォルダのファイルを削除できない | `expo-file-system` が外部ストレージの `deleteAsync` をブロック。`MANAGE_EXTERNAL_STORAGE` の実行時リクエストが未実装 | v1.3.0 で native module を追加して対応 |
-| 保存先フォルダへのファイル移動が失敗する | `moveFile` が `content://` SAF URI を `FileSystem.getInfoAsync` に渡しており非対応 | v1.3.0 で SAF API を使用するよう修正 |
+| Downloads フォルダのファイルを削除できない | `expo-file-system` が外部ストレージの `deleteAsync` をブロック。`MANAGE_EXTERNAL_STORAGE` の実行時リクエストが未実装 | v1.2.1 で修正済み |
+| 保存先フォルダへのファイル移動が失敗する | `moveFile` が `content://` SAF URI を `FileSystem.getInfoAsync` に渡しており非対応 | v1.2.1 で修正済み |
 
 ### テスト結果（v1.2.0）
 
