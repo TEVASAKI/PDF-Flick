@@ -290,7 +290,7 @@ import { useUndoRedoHistory } from '@/hooks/useUndoRedoHistory';
 | `addToHistory(entry)` | `void` | 操作を履歴に追加 |
 | `undo()` | `HistoryEntry \| null` | 直前のエントリを取得・削除 |
 | `canUndo()` | `boolean` | Undo 可能かどうか |
-| `getStatistics()` | `{ total, keep, delete }` | 操作統計 |
+| `getStatistics()` | `{ total, keep, delete, undoable, redoable }` | 操作統計 |
 
 ---
 

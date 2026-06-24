@@ -10,6 +10,7 @@
 import React from 'react';
 import renderer, { act, ReactTestRenderer } from 'react-test-renderer';
 import { Alert, TouchableOpacity, Text } from 'react-native';
+import * as FileSystem from 'expo-file-system/legacy';
 
 const FILES = [
   {
@@ -200,9 +201,8 @@ describe('メイン画面の統合フロー', () => {
   });
 
   it('設定ファイル削除後（exists=false）に saveFolderPath がリセットされ保存は未設定Alertを表示する', async () => {
-    const FS = require('expo-file-system/legacy');
     // config が存在しない状態（ユーザーが設定画面でクリアした直後）
-    (FS.getInfoAsync as jest.Mock).mockResolvedValue({ exists: false });
+    (FileSystem.getInfoAsync as jest.Mock).mockResolvedValue({ exists: false });
     const tree = await renderScreen();
 
     await pressButton(tree, '保存');
@@ -216,9 +216,8 @@ describe('メイン画面の統合フロー', () => {
   });
 
   it('設定ファイルが不正JSONのとき saveFolderPath がリセットされ保存は未設定Alertを表示する', async () => {
-    const FS = require('expo-file-system/legacy');
-    (FS.getInfoAsync as jest.Mock).mockResolvedValue({ exists: true });
-    (FS.readAsStringAsync as jest.Mock).mockResolvedValue('invalid json');
+    (FileSystem.getInfoAsync as jest.Mock).mockResolvedValue({ exists: true });
+    (FileSystem.readAsStringAsync as jest.Mock).mockResolvedValue('invalid json');
     const tree = await renderScreen();
 
     await pressButton(tree, '保存');

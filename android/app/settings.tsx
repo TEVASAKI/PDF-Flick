@@ -177,7 +177,7 @@ export default function SettingsScreen() {
         <View style={styles.card}>
           {[
             { label: 'アプリ名', value: 'PDF Flick' },
-            { label: 'バージョン', value: '1.1.0' },
+            { label: 'バージョン', value: '1.2.1' },
             { label: '対象', value: 'Android 8.0+' },
           ].map((item, index) => (
             <View key={index} style={styles.infoRow}>

@@ -1,7 +1,7 @@
 # PDF Flick - 実装ガイド
 
-**最終更新**: 2026年6月5日  
-**バージョン**: 1.2.0  
+**最終更新**: 2026年6月24日  
+**バージョン**: 1.2.1  
 **対象**: React Native Android版
 
 ---
@@ -242,10 +242,19 @@ export default function MyComponent() {
 #### **インターフェース**
 
 ```typescript
+interface FileOperationData {
+  path?: string;        // moveFile: 移動後のファイルURI
+  fileName?: string;    // moveFile / moveToTrash: ファイル名
+  trashPath?: string;   // moveToTrash: ゴミ箱内パス（Undo用）
+  filesDeleted?: number; // emptyTrash: 削除成功件数
+  filesFailed?: number;  // emptyTrash: 削除失敗件数
+  failures?: Array<{ filename: string; ok: false; error: string }>;
+}
+
 interface FileOperationResult {
   success: boolean;
   error?: string;
-  data?: any;
+  data?: FileOperationData;
 }
 
 interface FileOperationState {

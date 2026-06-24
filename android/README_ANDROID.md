@@ -1,6 +1,6 @@
 # PDF Flick - Android 版
 
-**バージョン**: 1.1.0  
+**バージョン**: 1.2.1  
 **フレームワーク**: React Native 0.81.5 + Expo SDK 54  
 **対応OS**: Android 8.0 (API 26) 以上  
 **パッケージID**: `com.pdfflick.app`
@@ -35,6 +35,7 @@ android/
 │   ├── useUndoRedoHistory.ts    # Undo/Redo 履歴管理（最大50件）
 │   └── usePDFPreview.ts         # PDF プレビュー生成（キャッシュ付き）
 ├── constants/
+│   ├── appConstants.ts          # DOWNLOADS_DIR・CONFIG_PATH などの共通定数
 │   └── theme.ts                 # カラー・スペーシング・シャドウ定義
 ├── components/                  # 汎用UIコンポーネント
 ├── assets/                      # アイコン・スプラッシュ画像
@@ -59,7 +60,7 @@ android/
 | アイコン | @expo/vector-icons (Ionicons) |
 | ビルド | EAS Build |
 
-> **注意**: `expo-file-system` v55 で旧 API が非推奨になりました。本アプリでは `expo-file-system` からインポートしています。
+> **注意**: `expo-file-system` v55 で旧 API が非推奨になりました。本アプリでは `expo-file-system/legacy` からインポートしています。
 
 ---
 
@@ -142,9 +143,6 @@ cd android
 | `READ_EXTERNAL_STORAGE` | Android ≤ 12 でのファイル読み取り |
 | `WRITE_EXTERNAL_STORAGE` | Android ≤ 12 でのファイル書き込み |
 | `MANAGE_EXTERNAL_STORAGE` | Downloads フォルダへの直接アクセス |
-| `READ_MEDIA_IMAGES` | Android 13+ メディアアクセス |
-| `READ_MEDIA_VIDEO` | 同上 |
-| `READ_MEDIA_AUDIO` | 同上 |
 
 ---
 
@@ -192,7 +190,7 @@ const { addToHistory, undo, canUndo, getStatistics } = useUndoRedoHistory();
 | `addToHistory(entry)` | 操作を履歴に追加 |
 | `undo()` | 直前の操作エントリを取得して削除 |
 | `canUndo()` | Undo 可能かどうか |
-| `getStatistics()` | `{ total, keep, delete }` 統計 |
+| `getStatistics()` | `{ total, keep, delete, undoable, redoable }` 統計 |
 
 ---
 
