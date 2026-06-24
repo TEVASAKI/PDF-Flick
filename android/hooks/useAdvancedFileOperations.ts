@@ -13,10 +13,19 @@ const logError = (context: string, err: unknown): void => {
   }
 };
 
+export interface FileOperationData {
+  path?: string;
+  fileName?: string;
+  trashPath?: string;
+  filesDeleted?: number;
+  filesFailed?: number;
+  failures?: Array<{ filename: string; ok: false; error: string }>;
+}
+
 export interface FileOperationResult {
   success: boolean;
   error?: string;
-  data?: unknown;
+  data?: FileOperationData;
 }
 
 /** expo-file-system getInfoAsync が返す拡張プロパティ */
@@ -274,7 +283,7 @@ export const useAdvancedFileOperations = () => {
 
         return {
           success: true,
-          data: { trashPath, originalFileName: fileName, originalPath: filePath },
+          data: { trashPath },
         };
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'ファイル削除エラー';
@@ -386,10 +395,10 @@ export const useAdvancedFileOperations = () => {
         fileList.map(async (filename) => {
           try {
             await FileSystem.deleteAsync(trashDir + filename);
-            return { filename, ok: true };
+            return { filename, ok: true as const };
           } catch (err) {
             logError(`emptyTrash: failed to delete ${filename}`, err);
-            return { filename, ok: false, error: err instanceof Error ? err.message : 'unknown' };
+            return { filename, ok: false as const, error: err instanceof Error ? err.message : 'unknown' };
           }
         })
       );

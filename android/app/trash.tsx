@@ -156,7 +156,7 @@ export default function TrashScreen() {
           onPress: async () => {
             const result = await emptyTrash();
             if (result.success) {
-              Alert.alert('成功', `${result.data.filesDeleted}個のファイルを削除しました`);
+              Alert.alert('成功', `${result.data?.filesDeleted ?? 0}個のファイルを削除しました`);
               loadTrashFiles();
             } else {
               Alert.alert('エラー', `削除に失敗しました: ${result.error}`);
