@@ -58,9 +58,12 @@ export default function PDFFlickEnhancedScreen() {
             const content = await FileSystem.readAsStringAsync(CONFIG_PATH);
             const config = JSON.parse(content);
             setSaveFolderPath(config.saveFolderPath ?? null);
+          } else {
+            setSaveFolderPath(null);
           }
         } catch (e) {
           console.warn('設定読み込みエラー:', e);
+          setSaveFolderPath(null);
         }
       };
       loadConfig();

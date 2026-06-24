@@ -199,6 +199,38 @@ describe('メイン画面の統合フロー', () => {
     expect(mockMoveFile).not.toHaveBeenCalled();
   });
 
+  it('設定ファイル削除後（exists=false）に saveFolderPath がリセットされ保存は未設定Alertを表示する', async () => {
+    const FS = require('expo-file-system/legacy');
+    // config が存在しない状態（ユーザーが設定画面でクリアした直後）
+    (FS.getInfoAsync as jest.Mock).mockResolvedValue({ exists: false });
+    const tree = await renderScreen();
+
+    await pressButton(tree, '保存');
+
+    expect(alertSpy).toHaveBeenCalledWith(
+      '保存先未設定',
+      expect.any(String),
+      expect.any(Array)
+    );
+    expect(mockMoveFile).not.toHaveBeenCalled();
+  });
+
+  it('設定ファイルが不正JSONのとき saveFolderPath がリセットされ保存は未設定Alertを表示する', async () => {
+    const FS = require('expo-file-system/legacy');
+    (FS.getInfoAsync as jest.Mock).mockResolvedValue({ exists: true });
+    (FS.readAsStringAsync as jest.Mock).mockResolvedValue('invalid json');
+    const tree = await renderScreen();
+
+    await pressButton(tree, '保存');
+
+    expect(alertSpy).toHaveBeenCalledWith(
+      '保存先未設定',
+      expect.any(String),
+      expect.any(Array)
+    );
+    expect(mockMoveFile).not.toHaveBeenCalled();
+  });
+
   describe('保存先（SAFフォルダ）設定済みの場合', () => {
     beforeEach(() => {
       // pdf_flick_config.json から saveFolderPath が読み込まれる状態を再現
