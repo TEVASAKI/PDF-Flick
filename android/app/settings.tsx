@@ -9,10 +9,9 @@ import {
 } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Colors, Spacing, BorderRadius, Shadows } from '@/constants/theme';
+import { CONFIG_PATH } from '@/constants/appConstants';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-
-const CONFIG_PATH = (FileSystem.documentDirectory ?? '') + 'pdf_flick_config.json';
 
 export default function SettingsScreen() {
   const router = useRouter();

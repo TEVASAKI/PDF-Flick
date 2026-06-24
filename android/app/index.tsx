@@ -14,14 +14,13 @@ import {
 import * as FileSystem from 'expo-file-system/legacy';
 import * as IntentLauncher from 'expo-intent-launcher';
 import { Colors, Spacing, Shadows, BorderRadius } from '@/constants/theme';
-import { usePDFFiles, DOWNLOADS_DIR } from '@/hooks/usePDFFiles';
+import { DOWNLOADS_DIR, CONFIG_PATH } from '@/constants/appConstants';
+import { usePDFFiles } from '@/hooks/usePDFFiles';
 import { useUndoRedoHistory } from '@/hooks/useUndoRedoHistory';
 import { useAdvancedFileOperations } from '@/hooks/useAdvancedFileOperations';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import Pdf from 'react-native-pdf';
-
-const CONFIG_PATH = (FileSystem.documentDirectory ?? '') + 'pdf_flick_config.json';
 
 /**
  * PDF Flick - 強化版メイン画面
@@ -48,8 +47,6 @@ export default function PDFFlickEnhancedScreen() {
 
   // アニメーション用
   const pan = useRef(new Animated.ValueXY()).current;
-  const swipeHintOpacity = useRef(new Animated.Value(0)).current;
-  const swipeHintDirection = useRef<'keep' | 'delete' | null>(null);
 
   // 設定画面から戻ったときも含めて保存先フォルダを読み込む
   useFocusEffect(

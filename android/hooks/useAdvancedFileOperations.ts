@@ -1,13 +1,29 @@
 import { useState, useCallback } from 'react';
 import * as FileSystem from 'expo-file-system/legacy';
 
-/**
- * ファイル操作の結果インターフェース
- */
+const __DEV__ = process.env.NODE_ENV !== 'production';
+
+/** 機微情報（ファイルパス）をログから除外する安全なエラーログ */
+const logError = (context: string, err: unknown): void => {
+  if (__DEV__) {
+    console.error(context, err);
+  } else {
+    const message = err instanceof Error ? err.message : 'unknown error';
+    console.error(`${context}: ${message}`);
+  }
+};
+
 export interface FileOperationResult {
   success: boolean;
   error?: string;
-  data?: any;
+  data?: unknown;
+}
+
+/** expo-file-system getInfoAsync が返す拡張プロパティ */
+interface FileInfoExtended {
+  exists: boolean;
+  size?: number;
+  modificationTime?: number;
 }
 
 /**
@@ -162,7 +178,7 @@ export const useAdvancedFileOperations = () => {
           isProcessing: false,
           error: errorMessage,
         }));
-        console.error('Error moving file:', err);
+        logError('moveFile', err);
         return { success: false, error: errorMessage };
       }
     },
@@ -210,7 +226,7 @@ export const useAdvancedFileOperations = () => {
           isProcessing: false,
           error: errorMessage,
         }));
-        console.error('Error deleting file:', err);
+        logError('deleteFile', err);
         return { success: false, error: errorMessage };
       }
     },
@@ -267,7 +283,7 @@ export const useAdvancedFileOperations = () => {
           isProcessing: false,
           error: errorMessage,
         }));
-        console.error('Error moving to trash:', err);
+        logError('moveToTrash', err);
         return { success: false, error: errorMessage };
       }
     },
@@ -315,7 +331,7 @@ export const useAdvancedFileOperations = () => {
           isProcessing: false,
           error: errorMessage,
         }));
-        console.error('Error restoring from trash:', err);
+        logError('restoreFromTrash', err);
         return { success: false, error: errorMessage };
       }
     },
@@ -333,13 +349,13 @@ export const useAdvancedFileOperations = () => {
       const trashFiles = await Promise.all(
         fileList.map(async (filename) => {
           const filePath = trashDir + filename;
-          const fileInfo = await FileSystem.getInfoAsync(filePath);
+          const fileInfo = await FileSystem.getInfoAsync(filePath) as FileInfoExtended;
 
           return {
             name: filename,
             path: filePath,
-            size: (fileInfo as any).size ?? 0,
-            modifiedDate: (fileInfo as any).modificationTime ? (fileInfo as any).modificationTime * 1000 : 0,
+            size: fileInfo.size ?? 0,
+            modifiedDate: fileInfo.modificationTime ? fileInfo.modificationTime * 1000 : 0,
           };
         })
       );
@@ -347,7 +363,7 @@ export const useAdvancedFileOperations = () => {
       return { success: true, data: trashFiles };
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'ゴミ箱取得エラー';
-      console.error('Error getting trash files:', err);
+      logError('getTrashFiles', err);
       return { success: false, error: errorMessage };
     }
   }, [getTrashDir]);
@@ -366,21 +382,35 @@ export const useAdvancedFileOperations = () => {
       const trashDir = await getTrashDir();
       const fileList = await FileSystem.readDirectoryAsync(trashDir);
 
-      // すべてのファイルを削除
-      await Promise.all(
-        fileList.map((filename) =>
-          FileSystem.deleteAsync(trashDir + filename).catch((err) => {
-            console.error(`Error deleting ${filename}:`, err);
-          })
-        )
+      const results = await Promise.all(
+        fileList.map(async (filename) => {
+          try {
+            await FileSystem.deleteAsync(trashDir + filename);
+            return { filename, ok: true };
+          } catch (err) {
+            logError(`emptyTrash: failed to delete ${filename}`, err);
+            return { filename, ok: false, error: err instanceof Error ? err.message : 'unknown' };
+          }
+        })
       );
+
+      const succeeded = results.filter((r) => r.ok).length;
+      const failed = results.filter((r) => !r.ok);
 
       setOperationState((prev) => ({
         ...prev,
         isProcessing: false,
       }));
 
-      return { success: true, data: { filesDeleted: fileList.length } };
+      if (failed.length > 0) {
+        return {
+          success: false,
+          error: `${failed.length}件の削除に失敗しました`,
+          data: { filesDeleted: succeeded, filesFailed: failed.length, failures: failed },
+        };
+      }
+
+      return { success: true, data: { filesDeleted: succeeded, filesFailed: 0 } };
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'ゴミ箱削除エラー';
       setOperationState((prev) => ({
@@ -388,7 +418,7 @@ export const useAdvancedFileOperations = () => {
         isProcessing: false,
         error: errorMessage,
       }));
-      console.error('Error emptying trash:', err);
+      logError('emptyTrash', err);
       return { success: false, error: errorMessage };
     }
   }, [getTrashDir]);

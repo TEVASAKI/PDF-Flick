@@ -9,6 +9,7 @@ import {
   Alert,
 } from 'react-native';
 import { Colors, Spacing, Shadows, BorderRadius } from '@/constants/theme';
+import { DOWNLOADS_DIR } from '@/constants/appConstants';
 import { useAdvancedFileOperations } from '@/hooks/useAdvancedFileOperations';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -94,9 +95,11 @@ export default function TrashScreen() {
    */
   const handleRestore = async (trashPath: string, originalFileName: string) => {
     try {
-      // タイムスタンププレフィックスを除いた元ファイル名を取得
-      const fileName = originalFileName.replace(/^\d+_/, '');
-      const downloadDir = 'file:///storage/emulated/0/Download/';
+      // タイムスタンププレフィックス（{timestamp}_{originalName}）を除去して元ファイル名を復元
+      // 正規表現による先頭数字削除は数字始まりファイル名（例: 2025invoice.pdf）を壊すため禁止
+      const underscoreIndex = originalFileName.indexOf('_');
+      const fileName = underscoreIndex >= 0 ? originalFileName.slice(underscoreIndex + 1) : originalFileName;
+      const downloadDir = DOWNLOADS_DIR;
 
       Alert.alert('確認', `「${fileName}」を復元しますか?`, [
         { text: 'キャンセル' },

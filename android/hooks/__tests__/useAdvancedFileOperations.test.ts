@@ -5,6 +5,10 @@ import {
 } from '../useAdvancedFileOperations';
 import * as FileSystem from 'expo-file-system/legacy';
 
+// emptyTrash のテストのためフック全体もインポートする際に使うモック用型
+// （renderHook は react-test-renderer ベースでここでは不要のためスキップし
+//   純粋関数ロジックのみ追加テスト）
+
 jest.mock('expo-file-system/legacy', () => ({
   documentDirectory: 'file:///data/user/0/com.pdfflick.app/files/',
   EncodingType: { Base64: 'base64' },
@@ -150,5 +154,53 @@ describe('performMoveFile', () => {
       );
       expect(mockFS.deleteAsync).toHaveBeenCalledWith(SAF_FILE);
     });
+  });
+});
+
+// --------------------------------------------------------------------------
+// getFileNameFromUri: 数字始まりファイル名のテスト
+// --------------------------------------------------------------------------
+describe('getFileNameFromUri: 数字始まりファイル名', () => {
+  it('2025invoice.pdf のファイル名を正しく取得できる', () => {
+    expect(
+      getFileNameFromUri('file:///storage/emulated/0/Download/2025invoice.pdf')
+    ).toBe('2025invoice.pdf');
+  });
+
+  it('123_report.pdf のファイル名を正しく取得できる', () => {
+    expect(
+      getFileNameFromUri('file:///storage/emulated/0/Download/123_report.pdf')
+    ).toBe('123_report.pdf');
+  });
+});
+
+// --------------------------------------------------------------------------
+// trash ファイル名復元ロジック
+// 実際の復元は trash.tsx 内で行われるが、同ロジックをここで検証
+// --------------------------------------------------------------------------
+describe('trash ファイル名復元（最初の _ で分割）', () => {
+  const restoreFileName = (trashName: string): string => {
+    const underscoreIndex = trashName.indexOf('_');
+    return underscoreIndex >= 0 ? trashName.slice(underscoreIndex + 1) : trashName;
+  };
+
+  it('通常ファイル名を復元できる', () => {
+    expect(restoreFileName('1750000000000_test_01.pdf')).toBe('test_01.pdf');
+  });
+
+  it('数字始まりファイル名 2025invoice.pdf を壊さず復元できる', () => {
+    expect(restoreFileName('1750000000000_2025invoice.pdf')).toBe('2025invoice.pdf');
+  });
+
+  it('アンダースコアを含む 123_report.pdf を正しく復元できる', () => {
+    expect(restoreFileName('1750000000000_123_report.pdf')).toBe('123_report.pdf');
+  });
+
+  it('001_test.pdf を正しく復元できる', () => {
+    expect(restoreFileName('1750000000000_001_test.pdf')).toBe('001_test.pdf');
+  });
+
+  it('アンダースコアがない場合はそのまま返す', () => {
+    expect(restoreFileName('nodivider')).toBe('nodivider');
   });
 });
