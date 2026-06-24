@@ -1,7 +1,7 @@
 # PDF Flick Android - テスト・デバッグガイド
 
-**更新日**: 2026年6月2日  
-**バージョン**: 1.1.0
+**更新日**: 2026年6月24日  
+**バージョン**: 1.2.1
 
 ---
 
@@ -13,7 +13,7 @@
 | TypeScript strict チェック | ✅ エラー 0 | `npx tsc --noEmit --strict` |
 | Expo Lint | ✅ エラー 0 / 警告 5 | `npx expo lint` |
 | Android バンドルビルド | ✅ 成功 (2.96 MB) | `npx expo export --platform android` |
-| ユニットテスト | ⚠️ 未整備 | — |
+| ユニットテスト | ✅ 28テスト通過 | `npm test` |
 
 ---
 
@@ -36,9 +36,23 @@ npx expo export --platform android
 
 ## ユニットテスト
 
-> **前提**: `jest` および `@testing-library/react-native` のセットアップが必要です。
+### 実装済みテストスイート（v1.2.1）
 
-### `useUndoRedoHistory` のテスト
+```
+npm test
+```
+
+| テストファイル | テスト数 | 内容 |
+|--------------|---------|------|
+| `hooks/__tests__/useAdvancedFileOperations.test.ts` | 14 | `isContentUri`, `getFileNameFromUri`, `performMoveFile`（file:// / SAF / Undo） |
+| `hooks/__tests__/emptyTrash.test.ts` | 4 | `emptyTrash` 成功/失敗件数集計 |
+| `app/__tests__/index.integration.test.tsx` | 10 | メイン画面統合フロー（削除→Undo、保存→Undo、エラー系） |
+
+**テスト基盤**: `jest-expo` + `react-test-renderer`。エミュレータ不要で CI 実行可能。
+
+---
+
+### `useUndoRedoHistory` のテスト（参考実装）
 
 ```typescript
 // hooks/__tests__/useUndoRedoHistory.test.ts

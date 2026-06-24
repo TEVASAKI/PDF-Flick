@@ -1,7 +1,7 @@
 # PDF Flick - Android 版仕様説明書
 
-**バージョン**: 1.2.0  
-**更新日**: 2026年6月5日  
+**バージョン**: 1.2.1  
+**更新日**: 2026年6月24日  
 **対象OS**: Android 8.0 (API 26) 以上
 
 ---
@@ -263,10 +263,19 @@ import { useAdvancedFileOperations } from '@/hooks/useAdvancedFileOperations';
 | `operationState` | — | `FileOperationState` |
 
 ```typescript
+interface FileOperationData {
+  path?: string;        // moveFile: 移動後の実際のファイルURI
+  fileName?: string;    // moveFile / moveToTrash: ファイル名
+  trashPath?: string;   // moveToTrash: ゴミ箱内パス（Undo用）
+  filesDeleted?: number; // emptyTrash: 削除成功件数
+  filesFailed?: number;  // emptyTrash: 削除失敗件数
+  failures?: Array<{ filename: string; ok: false; error: string }>; // emptyTrash: 失敗詳細
+}
+
 interface FileOperationResult {
   success: boolean;
   error?: string;
-  data?: any;
+  data?: FileOperationData;
 }
 ```
 
@@ -325,7 +334,6 @@ import { useUndoRedoHistory } from '@/hooks/useUndoRedoHistory';
 | `READ_EXTERNAL_STORAGE` | Android ≤ 12 |
 | `WRITE_EXTERNAL_STORAGE` | Android ≤ 12 |
 | `MANAGE_EXTERNAL_STORAGE` | Android 11+ |
-| `READ_MEDIA_IMAGES/VIDEO/AUDIO` | Android 13+ |
 
 ### データ保護
 
@@ -339,7 +347,6 @@ import { useUndoRedoHistory } from '@/hooks/useUndoRedoHistory';
 
 ### v1.3（次期バージョン）
 - **削除バグ修正**: ネイティブモジュールで `MANAGE_EXTERNAL_STORAGE` を利用した外部ストレージ削除
-- **保存バグ修正**: `moveFile` を SAF API（`StorageAccessFramework.createFileAsync`）に対応
 - ゴミ箱の複数ファイル一括復元・削除
 
 ### v2.0
