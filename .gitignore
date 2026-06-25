@@ -31,6 +31,7 @@ yarn-error.log*
 
 # Security
 *.keystore
+!android/android/app/debug.keystore
 *.jks
 .gradle/
 
@@ -47,3 +48,4 @@ android/build/
 # Testing
 coverage/
 .nyc_output/
+test-pdfs/

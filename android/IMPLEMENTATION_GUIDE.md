@@ -1,7 +1,7 @@
-# PDF Flick - Undo/Redo機能とファイル操作の実装ガイド
+# PDF Flick - 実装ガイド
 
-**作成日**: 2026年3月2日  
-**バージョン**: 1.0.0  
+**最終更新**: 2026年6月24日  
+**バージョン**: 1.2.1  
 **対象**: React Native Android版
 
 ---
@@ -9,17 +9,22 @@
 ## 目次
 
 1. [概要](#概要)
-2. [Undo/Redo機能](#undoredo機能)
-3. [ファイル操作](#ファイル操作)
-4. [ゴミ箱機能](#ゴミ箱機能)
-5. [実装例](#実装例)
-6. [トラブルシューティング](#トラブルシューティング)
+2. [PDFプレビュー](#pdfプレビュー)
+3. [Undo/Redo機能](#undoredo機能)
+4. [ファイル操作](#ファイル操作)
+5. [ゴミ箱機能](#ゴミ箱機能)
+6. [実装例](#実装例)
+7. [トラブルシューティング](#トラブルシューティング)
 
 ---
 
 ## 概要
 
-PDF Flick v1.0.0 では、以下の機能が実装されています：
+PDF Flick v1.2.0 では、以下の機能が実装されています：
+
+### **PDFリアルタイムプレビュー**（v1.2.0 追加）
+- `react-native-pdf` による PDF 1ページ目のネイティブレンダリング
+- ロード中スピナー・エラー時フォールバック対応
 
 ### **強化されたUndo/Redo機能**
 - 複数ステップのUndo/Redo対応
@@ -27,8 +32,8 @@ PDF Flick v1.0.0 では、以下の機能が実装されています：
 - 統計情報の取得
 
 ### **高度なファイル操作**
-- ファイルの移動
-- ファイルの削除
+- ファイルの移動（※ SAF URI 対応は v1.3.0 予定）
+- ファイルの削除（※ 外部ストレージ対応は v1.3.0 予定）
 - ゴミ箱機能（復元可能）
 - エラーハンドリング
 
@@ -36,6 +41,92 @@ PDF Flick v1.0.0 では、以下の機能が実装されています：
 - フリック操作でのファイル整理
 - 直感的なボタン操作
 - リアルタイム統計表示
+
+---
+
+## PDFプレビュー
+
+**ファイル**: `app/index.tsx`  
+**使用ライブラリ**: `react-native-pdf@^7.0.3`（package.json に既存）
+
+### 実装詳細
+
+カードの上部プレビュー領域に `Pdf` コンポーネントを配置し、PDF の 1ページ目を表示する。
+
+```tsx
+import Pdf from 'react-native-pdf';
+
+// state（コンポーネント内）
+const [pdfLoading, setPdfLoading] = useState(true);
+const [pdfError, setPdfError] = useState(false);
+
+// カード切り替え時にリセット
+useEffect(() => {
+  setPdfLoading(true);
+  setPdfError(false);
+}, [currentIndex]);
+
+// JSX
+<View style={styles.cardPreview}>
+  <Pdf
+    source={{ uri: currentFile.path }}  // file:// URI をそのまま渡す
+    page={1}                            // 1ページ目のみ
+    minScale={1.0}                      // ズーム禁止
+    maxScale={1.0}
+    scrollEnabled={false}               // スクロール禁止（スワイプと競合防止）
+    enablePaging={false}
+    fitPolicy={0}                       // 横幅フィット
+    style={styles.pdfPreview}
+    onLoadComplete={() => setPdfLoading(false)}
+    onError={() => { setPdfLoading(false); setPdfError(true); }}
+  />
+  {/* ロード中オーバーレイ */}
+  {pdfLoading && !pdfError && (
+    <View style={styles.pdfLoadingOverlay}>
+      <ActivityIndicator size="large" color={Colors.primary} />
+    </View>
+  )}
+  {/* エラー時フォールバック */}
+  {pdfError && (
+    <>
+      <Ionicons name="document-text" size={80} color={Colors.border} />
+      <Text style={styles.previewLabel}>PDF</Text>
+    </>
+  )}
+</View>
+```
+
+### スタイル
+
+```js
+cardPreview: {
+  flex: 1,
+  backgroundColor: Colors.muted,
+  justifyContent: 'center',
+  alignItems: 'center',
+  overflow: 'hidden',  // はみ出し防止
+},
+pdfPreview: {
+  flex: 1,
+  width: '100%',
+},
+pdfLoadingOverlay: {
+  position: 'absolute',
+  top: 0, left: 0, right: 0, bottom: 0,
+  justifyContent: 'center',
+  alignItems: 'center',
+  backgroundColor: Colors.muted,
+},
+```
+
+### 設計上の注意点
+
+| 項目 | 理由 |
+|------|------|
+| `minScale/maxScale=1.0` | ユーザーのピンチズームを封印。親 `PanResponder` のスワイプ検出と競合しない |
+| `scrollEnabled={false}` | PDF 内のスクロールを封印。スワイプ操作が正常に機能する |
+| `useEffect` でリセット | 前のカードのローディング・エラー状態が次のカードに引き継がれないよう `currentIndex` 変化時に初期化 |
+| `overflow: 'hidden'` | `cardPreview` の角丸外に PDF がはみ出さないよう制御 |
 
 ---
 
@@ -151,10 +242,19 @@ export default function MyComponent() {
 #### **インターフェース**
 
 ```typescript
+interface FileOperationData {
+  path?: string;        // moveFile: 移動後のファイルURI
+  fileName?: string;    // moveFile / moveToTrash: ファイル名
+  trashPath?: string;   // moveToTrash: ゴミ箱内パス（Undo用）
+  filesDeleted?: number; // emptyTrash: 削除成功件数
+  filesFailed?: number;  // emptyTrash: 削除失敗件数
+  failures?: Array<{ filename: string; ok: false; error: string }>;
+}
+
 interface FileOperationResult {
   success: boolean;
   error?: string;
-  data?: any;
+  data?: FileOperationData;
 }
 
 interface FileOperationState {

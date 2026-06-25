@@ -9,6 +9,7 @@ import {
   Alert,
 } from 'react-native';
 import { Colors, Spacing, Shadows, BorderRadius } from '@/constants/theme';
+import { DOWNLOADS_DIR } from '@/constants/appConstants';
 import { useAdvancedFileOperations } from '@/hooks/useAdvancedFileOperations';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -94,11 +95,13 @@ export default function TrashScreen() {
    */
   const handleRestore = async (trashPath: string, originalFileName: string) => {
     try {
-      // 元のファイルパスを推測（ゴミ箱ファイル名から）
-      const fileName = originalFileName.split('_').slice(1).join('_');
-      const downloadDir = '/path/to/Downloads/'; // 実装時に正しいパスに置き換え
+      // タイムスタンププレフィックス（{timestamp}_{originalName}）を除去して元ファイル名を復元
+      // 正規表現による先頭数字削除は数字始まりファイル名（例: 2025invoice.pdf）を壊すため禁止
+      const underscoreIndex = originalFileName.indexOf('_');
+      const fileName = underscoreIndex >= 0 ? originalFileName.slice(underscoreIndex + 1) : originalFileName;
+      const downloadDir = DOWNLOADS_DIR;
 
-      Alert.alert('確認', `ファイルを復元しますか?`, [
+      Alert.alert('確認', `「${fileName}」を復元しますか?`, [
         { text: 'キャンセル' },
         {
           text: '復元',
@@ -153,7 +156,7 @@ export default function TrashScreen() {
           onPress: async () => {
             const result = await emptyTrash();
             if (result.success) {
-              Alert.alert('成功', `${result.data.filesDeleted}個のファイルを削除しました`);
+              Alert.alert('成功', `${result.data?.filesDeleted ?? 0}個のファイルを削除しました`);
               loadTrashFiles();
             } else {
               Alert.alert('エラー', `削除に失敗しました: ${result.error}`);
@@ -433,7 +436,7 @@ const styles = StyleSheet.create({
   },
   fileCount: {
     fontSize: 14,
-    color: Colors.muted,
+    color: Colors.mutedForeground,
   },
   centerContent: {
     flex: 1,
@@ -442,7 +445,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 14,
-    color: Colors.muted,
+    color: Colors.mutedForeground,
     marginTop: Spacing.md,
   },
   errorText: {
@@ -453,7 +456,7 @@ const styles = StyleSheet.create({
   },
   errorDetail: {
     fontSize: 12,
-    color: Colors.muted,
+    color: Colors.mutedForeground,
     marginTop: Spacing.sm,
     textAlign: 'center',
     paddingHorizontal: Spacing.md,
@@ -471,7 +474,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 16,
-    color: Colors.muted,
+    color: Colors.mutedForeground,
     marginTop: Spacing.md,
   },
   listContent: {
@@ -482,7 +485,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: Colors.card,
+    backgroundColor: Colors.white,
     borderRadius: BorderRadius.md,
     padding: Spacing.md,
     ...Shadows.sm,
@@ -511,7 +514,7 @@ const styles = StyleSheet.create({
   },
   trashItemMeta: {
     fontSize: 12,
-    color: Colors.muted,
+    color: Colors.mutedForeground,
   },
   trashItemActions: {
     flexDirection: 'row',

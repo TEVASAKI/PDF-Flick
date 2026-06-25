@@ -1,15 +1,111 @@
 import { useState, useCallback } from 'react';
-import * as FileSystem from 'expo-file-system';
-import { Paths } from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 
-/**
- * ファイル操作の結果インターフェース
- */
+const __DEV__ = process.env.NODE_ENV !== 'production';
+
+/** 機微情報（ファイルパス）をログから除外する安全なエラーログ */
+const logError = (context: string, err: unknown): void => {
+  if (__DEV__) {
+    console.error(context, err);
+  } else {
+    const message = err instanceof Error ? err.message : 'unknown error';
+    console.error(`${context}: ${message}`);
+  }
+};
+
+export interface FileOperationData {
+  path?: string;
+  fileName?: string;
+  trashPath?: string;
+  filesDeleted?: number;
+  filesFailed?: number;
+  failures?: Array<{ filename: string; ok: false; error: string }>;
+}
+
 export interface FileOperationResult {
   success: boolean;
   error?: string;
-  data?: any;
+  data?: FileOperationData;
 }
+
+/** expo-file-system getInfoAsync が返す拡張プロパティ */
+interface FileInfoExtended {
+  exists: boolean;
+  size?: number;
+  modificationTime?: number;
+}
+
+/**
+ * SAF（Storage Access Framework）の content:// URI かどうかを判定
+ */
+export const isContentUri = (uri: string): boolean => uri.startsWith('content://');
+
+/**
+ * URI からファイル名を取得（SAF URI の %2F エンコードにも対応）
+ */
+export const getFileNameFromUri = (uri: string): string | null => {
+  const lastSegment = uri.split('/').pop();
+  if (!lastSegment) return null;
+  const decoded = decodeURIComponent(lastSegment);
+  return decoded.split('/').pop() || null;
+};
+
+/**
+ * ファイル移動のコアロジック（テスト可能な純粋関数）
+ *
+ * - file:// フォルダへの移動: copyAsync + deleteAsync
+ * - content://（SAF）フォルダへの移動: createFileAsync + Base64 読み書き
+ *   （getInfoAsync / copyAsync(to) は SAF URI 非対応のため）
+ *
+ * @returns 移動先の実ファイルURI とファイル名
+ * @throws 移動に失敗した場合
+ */
+export const performMoveFile = async (
+  sourcePath: string,
+  destinationFolder: string
+): Promise<{ path: string; fileName: string }> => {
+  const fileName = getFileNameFromUri(sourcePath);
+  if (!fileName) throw new Error('ファイル名を取得できません');
+
+  let destinationPath: string;
+
+  if (isContentUri(destinationFolder)) {
+    destinationPath = await FileSystem.StorageAccessFramework.createFileAsync(
+      destinationFolder,
+      fileName,
+      'application/pdf'
+    );
+    const base64 = await FileSystem.readAsStringAsync(sourcePath, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+    await FileSystem.writeAsStringAsync(destinationPath, base64, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+  } else {
+    const destDirInfo = await FileSystem.getInfoAsync(destinationFolder);
+    if (!destDirInfo.exists) {
+      await FileSystem.makeDirectoryAsync(destinationFolder, { intermediates: true });
+    }
+
+    destinationPath = destinationFolder + fileName;
+
+    // 同名ファイルが存在する場合は上書きせずエラー
+    const existingFile = await FileSystem.getInfoAsync(destinationPath);
+    if (existingFile.exists) {
+      throw new Error(`ファイル "${fileName}" は既に存在します`);
+    }
+
+    await FileSystem.copyAsync({
+      from: sourcePath,
+      to: destinationPath,
+    });
+  }
+
+  // 元のファイルを削除
+  await FileSystem.deleteAsync(sourcePath);
+
+  return { path: destinationPath, fileName };
+};
 
 /**
  * ファイル操作の状態インターフェース
@@ -42,7 +138,8 @@ export const useAdvancedFileOperations = () => {
    * ゴミ箱ディレクトリのパスを取得
    */
   const getTrashDir = useCallback(async (): Promise<string> => {
-    const trashDir = new FileSystem.File(Paths.document, 'Trash').uri + '/';
+    // アプリ内部ストレージにゴミ箱を作成（外部ストレージ権限不要）
+    const trashDir = (FileSystem.documentDirectory ?? '') + 'trash/';
     const dirInfo = await FileSystem.getInfoAsync(trashDir);
 
     if (!dirInfo.exists) {
@@ -64,31 +161,10 @@ export const useAdvancedFileOperations = () => {
           error: null,
         }));
 
-        const fileName = sourcePath.split('/').pop();
-        if (!fileName) throw new Error('ファイル名を取得できません');
-
-        // 移動先ディレクトリが存在するか確認
-        const destDirInfo = await FileSystem.getInfoAsync(destinationFolder);
-        if (!destDirInfo.exists) {
-          await FileSystem.makeDirectoryAsync(destinationFolder, { intermediates: true });
-        }
-
-        const destinationPath = destinationFolder + fileName;
-
-        // 同名ファイルが存在する場合は上書き確認
-        const existingFile = await FileSystem.getInfoAsync(destinationPath);
-        if (existingFile.exists) {
-          throw new Error(`ファイル "${fileName}" は既に存在します`);
-        }
-
-        // ファイルをコピー
-        await FileSystem.copyAsync({
-          from: sourcePath,
-          to: destinationPath,
-        });
-
-        // 元のファイルを削除
-        await FileSystem.deleteAsync(sourcePath);
+        const { path: destinationPath, fileName } = await performMoveFile(
+          sourcePath,
+          destinationFolder
+        );
 
         setOperationState((prev) => ({
           ...prev,
@@ -111,7 +187,7 @@ export const useAdvancedFileOperations = () => {
           isProcessing: false,
           error: errorMessage,
         }));
-        console.error('Error moving file:', err);
+        logError('moveFile', err);
         return { success: false, error: errorMessage };
       }
     },
@@ -159,7 +235,7 @@ export const useAdvancedFileOperations = () => {
           isProcessing: false,
           error: errorMessage,
         }));
-        console.error('Error deleting file:', err);
+        logError('deleteFile', err);
         return { success: false, error: errorMessage };
       }
     },
@@ -207,7 +283,7 @@ export const useAdvancedFileOperations = () => {
 
         return {
           success: true,
-          data: { trashPath, originalFileName: fileName, originalPath: filePath },
+          data: { trashPath },
         };
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'ファイル削除エラー';
@@ -216,7 +292,7 @@ export const useAdvancedFileOperations = () => {
           isProcessing: false,
           error: errorMessage,
         }));
-        console.error('Error moving to trash:', err);
+        logError('moveToTrash', err);
         return { success: false, error: errorMessage };
       }
     },
@@ -264,7 +340,7 @@ export const useAdvancedFileOperations = () => {
           isProcessing: false,
           error: errorMessage,
         }));
-        console.error('Error restoring from trash:', err);
+        logError('restoreFromTrash', err);
         return { success: false, error: errorMessage };
       }
     },
@@ -282,12 +358,12 @@ export const useAdvancedFileOperations = () => {
       const trashFiles = await Promise.all(
         fileList.map(async (filename) => {
           const filePath = trashDir + filename;
-          const fileInfo = await FileSystem.getInfoAsync(filePath);
+          const fileInfo = await FileSystem.getInfoAsync(filePath) as FileInfoExtended;
 
           return {
             name: filename,
             path: filePath,
-            size: fileInfo.size || 0,
+            size: fileInfo.size ?? 0,
             modifiedDate: fileInfo.modificationTime ? fileInfo.modificationTime * 1000 : 0,
           };
         })
@@ -296,7 +372,7 @@ export const useAdvancedFileOperations = () => {
       return { success: true, data: trashFiles };
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'ゴミ箱取得エラー';
-      console.error('Error getting trash files:', err);
+      logError('getTrashFiles', err);
       return { success: false, error: errorMessage };
     }
   }, [getTrashDir]);
@@ -315,21 +391,35 @@ export const useAdvancedFileOperations = () => {
       const trashDir = await getTrashDir();
       const fileList = await FileSystem.readDirectoryAsync(trashDir);
 
-      // すべてのファイルを削除
-      await Promise.all(
-        fileList.map((filename) =>
-          FileSystem.deleteAsync(trashDir + filename).catch((err) => {
-            console.error(`Error deleting ${filename}:`, err);
-          })
-        )
+      const results = await Promise.all(
+        fileList.map(async (filename) => {
+          try {
+            await FileSystem.deleteAsync(trashDir + filename);
+            return { filename, ok: true as const };
+          } catch (err) {
+            logError(`emptyTrash: failed to delete ${filename}`, err);
+            return { filename, ok: false as const, error: err instanceof Error ? err.message : 'unknown' };
+          }
+        })
       );
+
+      const succeeded = results.filter((r) => r.ok).length;
+      const failed = results.filter((r) => !r.ok);
 
       setOperationState((prev) => ({
         ...prev,
         isProcessing: false,
       }));
 
-      return { success: true, data: { filesDeleted: fileList.length } };
+      if (failed.length > 0) {
+        return {
+          success: false,
+          error: `${failed.length}件の削除に失敗しました`,
+          data: { filesDeleted: succeeded, filesFailed: failed.length, failures: failed },
+        };
+      }
+
+      return { success: true, data: { filesDeleted: succeeded, filesFailed: 0 } };
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'ゴミ箱削除エラー';
       setOperationState((prev) => ({
@@ -337,7 +427,7 @@ export const useAdvancedFileOperations = () => {
         isProcessing: false,
         error: errorMessage,
       }));
-      console.error('Error emptying trash:', err);
+      logError('emptyTrash', err);
       return { success: false, error: errorMessage };
     }
   }, [getTrashDir]);
